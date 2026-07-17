@@ -1,172 +1,54 @@
 import type { Difficulty, SpeechLanguage, Topic } from '../types';
+import { BENGALI_TOPICS } from './topics.bn';
+import { ENGLISH_TOPICS } from './topics.en';
+import { HINDI_TOPICS } from './topics.hi';
 
-export const TOPICS: Topic[] = [
-  { id: 'easy-01', difficulty: 'easy', category: 'Everyday life', prompt: 'Homework should be optional on weekends.' },
-  { id: 'easy-02', difficulty: 'easy', category: 'Food', prompt: 'Breakfast is the most important meal of the day.' },
-  { id: 'easy-03', difficulty: 'easy', category: 'Technology', prompt: 'Students should be allowed to use phones in class.' },
-  { id: 'easy-04', difficulty: 'easy', category: 'Lifestyle', prompt: 'Living in a small town is better than living in a big city.' },
-  { id: 'easy-05', difficulty: 'easy', category: 'Entertainment', prompt: 'Books are more enjoyable than films.' },
-  { id: 'easy-06', difficulty: 'easy', category: 'School', prompt: 'School uniforms are a good idea.' },
-  { id: 'easy-07', difficulty: 'easy', category: 'Animals', prompt: 'Every child should grow up with a pet.' },
-  { id: 'easy-08', difficulty: 'easy', category: 'Travel', prompt: 'A holiday is better when it is carefully planned.' },
-  { id: 'easy-09', difficulty: 'easy', category: 'Work', prompt: 'A four-day work week should become standard.' },
-  { id: 'easy-10', difficulty: 'easy', category: 'Social life', prompt: 'It is better to have a few close friends than many acquaintances.' },
-  { id: 'easy-11', difficulty: 'easy', category: 'Learning', prompt: 'Everyone should learn how to cook.' },
-  { id: 'easy-12', difficulty: 'easy', category: 'Sports', prompt: 'Team sports teach more useful skills than individual sports.' },
-  { id: 'easy-13', difficulty: 'easy', category: 'Reading', prompt: 'Printed books are better than e-books.' },
-  { id: 'easy-14', difficulty: 'easy', category: 'School', prompt: 'The school day should start later in the morning.' },
-  { id: 'easy-15', difficulty: 'easy', category: 'Money', prompt: 'Children should earn pocket money by doing household chores.' },
-  { id: 'easy-16', difficulty: 'easy', category: 'Cities', prompt: 'Every neighborhood should have a public park within walking distance.' },
-  { id: 'easy-17', difficulty: 'easy', category: 'Work', prompt: 'Working from home is better than working in an office.' },
-  { id: 'easy-18', difficulty: 'easy', category: 'Celebrations', prompt: 'Experiences make better birthday gifts than objects.' },
-  { id: 'easy-19', difficulty: 'easy', category: 'School', prompt: 'Schools should teach basic cooking and home repair.' },
-  { id: 'easy-20', difficulty: 'easy', category: 'Entertainment', prompt: 'Board games are more fun than video games.' },
-  { id: 'easy-21', difficulty: 'easy', category: 'Animals', prompt: 'Zoos should focus only on endangered species.' },
-  { id: 'easy-22', difficulty: 'easy', category: 'Learning', prompt: 'Listening to music helps people study.' },
-  { id: 'easy-23', difficulty: 'easy', category: 'Technology', prompt: 'People should keep their cameras on during online meetings.' },
-  { id: 'easy-24', difficulty: 'easy', category: 'Lifestyle', prompt: 'It is better to spend money on travel than on expensive possessions.' },
+export { BENGALI_TOPICS, ENGLISH_TOPICS, HINDI_TOPICS };
 
-  { id: 'medium-01', difficulty: 'medium', category: 'Education', prompt: 'University education should be free for everyone.' },
-  { id: 'medium-02', difficulty: 'medium', category: 'Technology', prompt: 'Social media companies should verify the age of every user.' },
-  { id: 'medium-03', difficulty: 'medium', category: 'Work', prompt: 'Employers should publish salary ranges in every job advertisement.' },
-  { id: 'medium-04', difficulty: 'medium', category: 'Environment', prompt: 'Cities should charge drivers to enter crowded downtown areas.' },
-  { id: 'medium-05', difficulty: 'medium', category: 'Media', prompt: 'News organizations should avoid reporting opinion polls before elections.' },
-  { id: 'medium-06', difficulty: 'medium', category: 'Health', prompt: 'Governments should tax foods with very high sugar content.' },
-  { id: 'medium-07', difficulty: 'medium', category: 'Culture', prompt: 'Museums should return historic objects to their countries of origin.' },
-  { id: 'medium-08', difficulty: 'medium', category: 'AI', prompt: 'AI-generated content should always carry a visible label.' },
-  { id: 'medium-09', difficulty: 'medium', category: 'Transport', prompt: 'Public transport should be free in major cities.' },
-  { id: 'medium-10', difficulty: 'medium', category: 'Privacy', prompt: 'Parents should be allowed to monitor all of their teenagers’ online activity.' },
-  { id: 'medium-11', difficulty: 'medium', category: 'Democracy', prompt: 'Voting should be compulsory for eligible citizens.' },
-  { id: 'medium-12', difficulty: 'medium', category: 'Consumer rights', prompt: 'Fast fashion advertising should be restricted.' },
-  { id: 'medium-13', difficulty: 'medium', category: 'Consumer rights', prompt: 'Manufacturers should be required to make electronic devices easy to repair.' },
-  { id: 'medium-14', difficulty: 'medium', category: 'Technology', prompt: 'Social media users should be able to turn off recommendation algorithms completely.' },
-  { id: 'medium-15', difficulty: 'medium', category: 'Education', prompt: 'Remote exam-proctoring software should be banned.' },
-  { id: 'medium-16', difficulty: 'medium', category: 'Advertising', prompt: 'Online advertising aimed at children should be prohibited.' },
-  { id: 'medium-17', difficulty: 'medium', category: 'Tourism', prompt: 'Popular destinations should cap the number of tourists they admit each day.' },
-  { id: 'medium-18', difficulty: 'medium', category: 'Money', prompt: 'Businesses should always be required to accept cash.' },
-  { id: 'medium-19', difficulty: 'medium', category: 'Libraries', prompt: 'Public libraries should lend tools and household equipment as well as books.' },
-  { id: 'medium-20', difficulty: 'medium', category: 'Work', prompt: 'Employees should have a legal right to ignore work messages outside working hours.' },
-  { id: 'medium-21', difficulty: 'medium', category: 'Sports', prompt: 'Public funding should support community sports rather than professional stadiums.' },
-  { id: 'medium-22', difficulty: 'medium', category: 'Labor', prompt: 'Food-delivery platforms should treat regular couriers as employees.' },
-  { id: 'medium-23', difficulty: 'medium', category: 'Housing', prompt: 'Cities should limit how many homes can be used as short-term rentals.' },
-  { id: 'medium-24', difficulty: 'medium', category: 'Media', prompt: 'Streaming services should disclose how their recommendation systems rank content.' },
-
-  { id: 'hard-01', difficulty: 'hard', category: 'Justice', prompt: 'Predictive algorithms should never influence criminal sentencing.' },
-  { id: 'hard-02', difficulty: 'hard', category: 'Economics', prompt: 'A universal basic income is preferable to targeted welfare programs.' },
-  { id: 'hard-03', difficulty: 'hard', category: 'Technology', prompt: 'Powerful AI systems should require government licensing before deployment.' },
-  { id: 'hard-04', difficulty: 'hard', category: 'Environment', prompt: 'Countries should prioritize climate adaptation over emissions reduction.' },
-  { id: 'hard-05', difficulty: 'hard', category: 'Speech', prompt: 'Online platforms should be legally responsible for harmful misinformation posted by users.' },
-  { id: 'hard-06', difficulty: 'hard', category: 'Ethics', prompt: 'Human genetic enhancement should be permitted under strict regulation.' },
-  { id: 'hard-07', difficulty: 'hard', category: 'International relations', prompt: 'Economic sanctions cause more harm than good.' },
-  { id: 'hard-08', difficulty: 'hard', category: 'Democracy', prompt: 'Citizens’ assemblies should be able to overrule elected legislatures on long-term issues.' },
-  { id: 'hard-09', difficulty: 'hard', category: 'Economics', prompt: 'Companies should be required to give employees voting representation on their boards.' },
-  { id: 'hard-10', difficulty: 'hard', category: 'Privacy', prompt: 'The right to digital privacy should outweigh national security surveillance needs.' },
-  { id: 'hard-11', difficulty: 'hard', category: 'Science', prompt: 'Public funding should favor practical research over curiosity-driven research.' },
-  { id: 'hard-12', difficulty: 'hard', category: 'Law', prompt: 'Legal personhood should be extended to certain natural ecosystems.' },
-  { id: 'hard-13', difficulty: 'hard', category: 'Climate policy', prompt: 'Countries should impose carbon tariffs on imports from high-emission economies.' },
-  { id: 'hard-14', difficulty: 'hard', category: 'Finance', prompt: 'Central-bank digital currencies would do more good than harm.' },
-  { id: 'hard-15', difficulty: 'hard', category: 'Speech', prompt: 'A healthy democracy requires a protected right to speak anonymously online.' },
-  { id: 'hard-16', difficulty: 'hard', category: 'Resources', prompt: 'Household water should be priced progressively rather than treated as a flat-cost utility.' },
-  { id: 'hard-17', difficulty: 'hard', category: 'Security', prompt: 'Fully autonomous weapons should be prohibited by international law.' },
-  { id: 'hard-18', difficulty: 'hard', category: 'Data rights', prompt: 'Large technology companies should pay users a dividend for commercially valuable personal data.' },
-  { id: 'hard-19', difficulty: 'hard', category: 'Public health', prompt: 'Patent protections should be suspended during declared global health emergencies.' },
-  { id: 'hard-20', difficulty: 'hard', category: 'Climate science', prompt: 'Governments should fund outdoor experiments in solar geoengineering.' },
-  { id: 'hard-21', difficulty: 'hard', category: 'Democracy', prompt: 'Major infrastructure projects should require approval from an independent future-generations council.' },
-  { id: 'hard-22', difficulty: 'hard', category: 'Technology', prompt: 'Dominant digital platforms should be forced to interoperate with competing services.' },
-  { id: 'hard-23', difficulty: 'hard', category: 'Taxation', prompt: 'Taxes on inherited wealth are more just than taxes on earned income.' },
-  { id: 'hard-24', difficulty: 'hard', category: 'Governance', prompt: 'Independent expert agencies should have more policy authority than elected officials during complex crises.' },
-];
-
-export const BENGALI_TOPICS: Topic[] = [
-  { id: 'bn-easy-01', language: 'bn', difficulty: 'easy', category: 'শিক্ষা', prompt: 'সপ্তাহান্তে শিক্ষার্থীদের বাড়ির কাজ ঐচ্ছিক হওয়া উচিত।' },
-  { id: 'bn-easy-02', language: 'bn', difficulty: 'easy', category: 'প্রযুক্তি', prompt: 'বিদ্যালয়ে শিক্ষার্থীদের মোবাইল ফোন ব্যবহার করতে দেওয়া উচিত।' },
-  { id: 'bn-easy-03', language: 'bn', difficulty: 'easy', category: 'পড়াশোনা', prompt: 'ই-বুকের চেয়ে মুদ্রিত বই ভালো।' },
-  { id: 'bn-easy-04', language: 'bn', difficulty: 'easy', category: 'কর্মজীবন', prompt: 'অফিসে কাজ করার চেয়ে বাড়ি থেকে কাজ করা ভালো।' },
-  { id: 'bn-easy-05', language: 'bn', difficulty: 'easy', category: 'কর্মজীবন', prompt: 'চার দিনের কর্মসপ্তাহ সাধারণ নিয়ম হওয়া উচিত।' },
-  { id: 'bn-easy-06', language: 'bn', difficulty: 'easy', category: 'জীবনদক্ষতা', prompt: 'প্রত্যেকের রান্না শেখা উচিত।' },
-  { id: 'bn-easy-07', language: 'bn', difficulty: 'easy', category: 'খেলাধুলা', prompt: 'ব্যক্তিগত খেলার চেয়ে দলগত খেলা বেশি দরকারি দক্ষতা শেখায়।' },
-  { id: 'bn-easy-08', language: 'bn', difficulty: 'easy', category: 'উপহার', prompt: 'জিনিসের চেয়ে অভিজ্ঞতা ভালো জন্মদিনের উপহার।' },
-  { id: 'bn-easy-09', language: 'bn', difficulty: 'easy', category: 'বিদ্যালয়', prompt: 'সকালে বিদ্যালয় আরও দেরিতে শুরু হওয়া উচিত।' },
-  { id: 'bn-easy-10', language: 'bn', difficulty: 'easy', category: 'নগরজীবন', prompt: 'প্রতিটি পাড়ায় হাঁটার দূরত্বে একটি জনসাধারণের পার্ক থাকা উচিত।' },
-  { id: 'bn-easy-11', language: 'bn', difficulty: 'easy', category: 'সম্পর্ক', prompt: 'অনেক পরিচিত মানুষের চেয়ে অল্প কয়েকজন ঘনিষ্ঠ বন্ধু থাকা ভালো।' },
-  { id: 'bn-easy-12', language: 'bn', difficulty: 'easy', category: 'ভ্রমণ', prompt: 'আগে থেকে ভালোভাবে পরিকল্পনা করলে ছুটি বেশি উপভোগ্য হয়।' },
-
-  { id: 'bn-medium-01', language: 'bn', difficulty: 'medium', category: 'শিক্ষা', prompt: 'সবার জন্য বিশ্ববিদ্যালয় শিক্ষা বিনামূল্যে হওয়া উচিত।' },
-  { id: 'bn-medium-02', language: 'bn', difficulty: 'medium', category: 'কৃত্রিম বুদ্ধিমত্তা', prompt: 'কৃত্রিম বুদ্ধিমত্তায় তৈরি সব কনটেন্টে দৃশ্যমান লেবেল থাকা উচিত।' },
-  { id: 'bn-medium-03', language: 'bn', difficulty: 'medium', category: 'পরিবহন', prompt: 'বড় শহরে জনপরিবহন বিনামূল্যে হওয়া উচিত।' },
-  { id: 'bn-medium-04', language: 'bn', difficulty: 'medium', category: 'কর্মসংস্থান', prompt: 'প্রতিটি চাকরির বিজ্ঞাপনে বেতনের সীমা প্রকাশ করা উচিত।' },
-  { id: 'bn-medium-05', language: 'bn', difficulty: 'medium', category: 'কর্মজীবন', prompt: 'কাজের সময়ের বাইরে অফিসের বার্তা উপেক্ষা করার আইনি অধিকার কর্মীদের থাকা উচিত।' },
-  { id: 'bn-medium-06', language: 'bn', difficulty: 'medium', category: 'সামাজিক মাধ্যম', prompt: 'সামাজিক মাধ্যম প্রতিষ্ঠানগুলোর প্রত্যেক ব্যবহারকারীর বয়স যাচাই করা উচিত।' },
-  { id: 'bn-medium-07', language: 'bn', difficulty: 'medium', category: 'স্বাস্থ্য', prompt: 'অতিরিক্ত চিনিযুক্ত খাবারের ওপর সরকারের বেশি কর আরোপ করা উচিত।' },
-  { id: 'bn-medium-08', language: 'bn', difficulty: 'medium', category: 'সংস্কৃতি', prompt: 'জাদুঘরগুলোর ঐতিহাসিক নিদর্শন তাদের উৎস দেশে ফিরিয়ে দেওয়া উচিত।' },
-  { id: 'bn-medium-09', language: 'bn', difficulty: 'medium', category: 'শিক্ষা', prompt: 'দূরবর্তী পরীক্ষায় নজরদারি সফটওয়্যার নিষিদ্ধ করা উচিত।' },
-  { id: 'bn-medium-10', language: 'bn', difficulty: 'medium', category: 'গণতন্ত্র', prompt: 'যোগ্য নাগরিকদের জন্য ভোট দেওয়া বাধ্যতামূলক হওয়া উচিত।' },
-  { id: 'bn-medium-11', language: 'bn', difficulty: 'medium', category: 'ভোক্তা অধিকার', prompt: 'ইলেকট্রনিক যন্ত্র সহজে মেরামতযোগ্য করা নির্মাতাদের জন্য বাধ্যতামূলক হওয়া উচিত।' },
-  { id: 'bn-medium-12', language: 'bn', difficulty: 'medium', category: 'পর্যটন', prompt: 'জনপ্রিয় পর্যটনকেন্দ্রে প্রতিদিনের দর্শনার্থীর সংখ্যা সীমিত করা উচিত।' },
-
-  { id: 'bn-hard-01', language: 'bn', difficulty: 'hard', category: 'অর্থনীতি', prompt: 'লক্ষ্যভিত্তিক কল্যাণ কর্মসূচির চেয়ে সর্বজনীন মৌলিক আয় ভালো।' },
-  { id: 'bn-hard-02', language: 'bn', difficulty: 'hard', category: 'প্রযুক্তি', prompt: 'শক্তিশালী কৃত্রিম বুদ্ধিমত্তা ব্যবস্থা চালুর আগে সরকারি লাইসেন্স বাধ্যতামূলক হওয়া উচিত।' },
-  { id: 'bn-hard-03', language: 'bn', difficulty: 'hard', category: 'জলবায়ু', prompt: 'দেশগুলোর নিঃসরণ কমানোর চেয়ে জলবায়ু পরিবর্তনের সঙ্গে অভিযোজনকে অগ্রাধিকার দেওয়া উচিত।' },
-  { id: 'bn-hard-04', language: 'bn', difficulty: 'hard', category: 'মতপ্রকাশ', prompt: 'ব্যবহারকারীর ক্ষতিকর ভুল তথ্যের জন্য অনলাইন প্ল্যাটফর্মকে আইনিভাবে দায়ী করা উচিত।' },
-  { id: 'bn-hard-05', language: 'bn', difficulty: 'hard', category: 'নৈতিকতা', prompt: 'কঠোর নিয়ন্ত্রণের অধীনে মানুষের জিনগত উন্নয়ন অনুমোদন করা উচিত।' },
-  { id: 'bn-hard-06', language: 'bn', difficulty: 'hard', category: 'আন্তর্জাতিক সম্পর্ক', prompt: 'অর্থনৈতিক নিষেধাজ্ঞা উপকারের চেয়ে বেশি ক্ষতি করে।' },
-  { id: 'bn-hard-07', language: 'bn', difficulty: 'hard', category: 'মতপ্রকাশ', prompt: 'সুস্থ গণতন্ত্রের জন্য অনলাইনে পরিচয় গোপন রেখে কথা বলার অধিকার সুরক্ষিত থাকা দরকার।' },
-  { id: 'bn-hard-08', language: 'bn', difficulty: 'hard', category: 'নিরাপত্তা', prompt: 'সম্পূর্ণ স্বয়ংক্রিয় অস্ত্র আন্তর্জাতিক আইনে নিষিদ্ধ করা উচিত।' },
-  { id: 'bn-hard-09', language: 'bn', difficulty: 'hard', category: 'জনস্বাস্থ্য', prompt: 'ঘোষিত বৈশ্বিক স্বাস্থ্য জরুরি অবস্থায় ওষুধের পেটেন্ট সুরক্ষা স্থগিত করা উচিত।' },
-  { id: 'bn-hard-10', language: 'bn', difficulty: 'hard', category: 'করনীতি', prompt: 'অর্জিত আয়ের ওপর করের চেয়ে উত্তরাধিকারসূত্রে পাওয়া সম্পদের ওপর কর বেশি ন্যায়সঙ্গত।' },
-  { id: 'bn-hard-11', language: 'bn', difficulty: 'hard', category: 'শাসনব্যবস্থা', prompt: 'জটিল সংকটে নির্বাচিত রাজনীতিবিদদের চেয়ে স্বাধীন বিশেষজ্ঞ সংস্থার বেশি নীতিনির্ধারণী ক্ষমতা থাকা উচিত।' },
-  { id: 'bn-hard-12', language: 'bn', difficulty: 'hard', category: 'গোপনীয়তা', prompt: 'জাতীয় নিরাপত্তার নজরদারির প্রয়োজনের চেয়ে ডিজিটাল গোপনীয়তার অধিকার বেশি গুরুত্বপূর্ণ।' },
-];
-
-export const HINDI_TOPICS: Topic[] = [
-  { id: 'hi-easy-01', language: 'hi', difficulty: 'easy', category: 'शिक्षा', prompt: 'सप्ताहांत पर विद्यार्थियों के लिए गृहकार्य वैकल्पिक होना चाहिए।' },
-  { id: 'hi-easy-02', language: 'hi', difficulty: 'easy', category: 'प्रौद्योगिकी', prompt: 'विद्यार्थियों को कक्षा में मोबाइल फोन इस्तेमाल करने की अनुमति होनी चाहिए।' },
-  { id: 'hi-easy-03', language: 'hi', difficulty: 'easy', category: 'पठन', prompt: 'ई-पुस्तकों की तुलना में मुद्रित पुस्तकें बेहतर हैं।' },
-  { id: 'hi-easy-04', language: 'hi', difficulty: 'easy', category: 'कार्यजीवन', prompt: 'कार्यालय में काम करने की तुलना में घर से काम करना बेहतर है।' },
-  { id: 'hi-easy-05', language: 'hi', difficulty: 'easy', category: 'कार्यजीवन', prompt: 'चार दिन का कार्य सप्ताह सामान्य नियम होना चाहिए।' },
-  { id: 'hi-easy-06', language: 'hi', difficulty: 'easy', category: 'जीवन कौशल', prompt: 'हर व्यक्ति को खाना बनाना सीखना चाहिए।' },
-  { id: 'hi-easy-07', language: 'hi', difficulty: 'easy', category: 'खेल', prompt: 'व्यक्तिगत खेलों की तुलना में टीम खेल अधिक उपयोगी कौशल सिखाते हैं।' },
-  { id: 'hi-easy-08', language: 'hi', difficulty: 'easy', category: 'उपहार', prompt: 'वस्तुओं की तुलना में अनुभव बेहतर जन्मदिन उपहार हैं।' },
-  { id: 'hi-easy-09', language: 'hi', difficulty: 'easy', category: 'विद्यालय', prompt: 'विद्यालय का दिन सुबह देर से शुरू होना चाहिए।' },
-  { id: 'hi-easy-10', language: 'hi', difficulty: 'easy', category: 'शहरी जीवन', prompt: 'हर मोहल्ले में पैदल दूरी पर एक सार्वजनिक पार्क होना चाहिए।' },
-  { id: 'hi-easy-11', language: 'hi', difficulty: 'easy', category: 'संबंध', prompt: 'बहुत से परिचितों की तुलना में कुछ करीबी मित्र होना बेहतर है।' },
-  { id: 'hi-easy-12', language: 'hi', difficulty: 'easy', category: 'यात्रा', prompt: 'पहले से अच्छी योजना बनाने पर छुट्टी अधिक आनंददायक होती है।' },
-
-  { id: 'hi-medium-01', language: 'hi', difficulty: 'medium', category: 'शिक्षा', prompt: 'सभी के लिए विश्वविद्यालय की शिक्षा निःशुल्क होनी चाहिए।' },
-  { id: 'hi-medium-02', language: 'hi', difficulty: 'medium', category: 'कृत्रिम बुद्धिमत्ता', prompt: 'कृत्रिम बुद्धिमत्ता से बनी हर सामग्री पर स्पष्ट लेबल होना चाहिए।' },
-  { id: 'hi-medium-03', language: 'hi', difficulty: 'medium', category: 'परिवहन', prompt: 'बड़े शहरों में सार्वजनिक परिवहन निःशुल्क होना चाहिए।' },
-  { id: 'hi-medium-04', language: 'hi', difficulty: 'medium', category: 'रोजगार', prompt: 'हर नौकरी के विज्ञापन में वेतन की सीमा बताना अनिवार्य होना चाहिए।' },
-  { id: 'hi-medium-05', language: 'hi', difficulty: 'medium', category: 'कार्यजीवन', prompt: 'कर्मचारियों को काम के समय के बाहर कार्यालय के संदेश अनदेखा करने का कानूनी अधिकार होना चाहिए।' },
-  { id: 'hi-medium-06', language: 'hi', difficulty: 'medium', category: 'सोशल मीडिया', prompt: 'सोशल मीडिया कंपनियों को हर उपयोगकर्ता की आयु की पुष्टि करनी चाहिए।' },
-  { id: 'hi-medium-07', language: 'hi', difficulty: 'medium', category: 'स्वास्थ्य', prompt: 'सरकार को बहुत अधिक चीनी वाले खाद्य पदार्थों पर अधिक कर लगाना चाहिए।' },
-  { id: 'hi-medium-08', language: 'hi', difficulty: 'medium', category: 'संस्कृति', prompt: 'संग्रहालयों को ऐतिहासिक वस्तुएँ उनके मूल देशों को लौटा देनी चाहिए।' },
-  { id: 'hi-medium-09', language: 'hi', difficulty: 'medium', category: 'शिक्षा', prompt: 'ऑनलाइन परीक्षा निगरानी सॉफ्टवेयर पर प्रतिबंध लगना चाहिए।' },
-  { id: 'hi-medium-10', language: 'hi', difficulty: 'medium', category: 'लोकतंत्र', prompt: 'योग्य नागरिकों के लिए मतदान करना अनिवार्य होना चाहिए।' },
-  { id: 'hi-medium-11', language: 'hi', difficulty: 'medium', category: 'उपभोक्ता अधिकार', prompt: 'निर्माताओं के लिए इलेक्ट्रॉनिक उपकरणों को आसानी से मरम्मत योग्य बनाना अनिवार्य होना चाहिए।' },
-  { id: 'hi-medium-12', language: 'hi', difficulty: 'medium', category: 'पर्यटन', prompt: 'लोकप्रिय पर्यटन स्थलों पर रोज़ आने वाले पर्यटकों की संख्या सीमित होनी चाहिए।' },
-
-  { id: 'hi-hard-01', language: 'hi', difficulty: 'hard', category: 'अर्थव्यवस्था', prompt: 'लक्षित कल्याण योजनाओं की तुलना में सार्वभौमिक मूल आय बेहतर है।' },
-  { id: 'hi-hard-02', language: 'hi', difficulty: 'hard', category: 'प्रौद्योगिकी', prompt: 'शक्तिशाली कृत्रिम बुद्धिमत्ता प्रणालियों को जारी करने से पहले सरकारी लाइसेंस अनिवार्य होना चाहिए।' },
-  { id: 'hi-hard-03', language: 'hi', difficulty: 'hard', category: 'जलवायु', prompt: 'देशों को उत्सर्जन कम करने की तुलना में जलवायु परिवर्तन के अनुकूलन को प्राथमिकता देनी चाहिए।' },
-  { id: 'hi-hard-04', language: 'hi', difficulty: 'hard', category: 'अभिव्यक्ति', prompt: 'उपयोगकर्ताओं द्वारा पोस्ट की गई हानिकारक गलत जानकारी के लिए ऑनलाइन प्लेटफ़ॉर्म कानूनी रूप से ज़िम्मेदार होने चाहिए।' },
-  { id: 'hi-hard-05', language: 'hi', difficulty: 'hard', category: 'नैतिकता', prompt: 'कड़े नियमन के अधीन मानव आनुवंशिक संवर्धन की अनुमति होनी चाहिए।' },
-  { id: 'hi-hard-06', language: 'hi', difficulty: 'hard', category: 'अंतरराष्ट्रीय संबंध', prompt: 'आर्थिक प्रतिबंध लाभ से अधिक नुकसान पहुँचाते हैं।' },
-  { id: 'hi-hard-07', language: 'hi', difficulty: 'hard', category: 'अभिव्यक्ति', prompt: 'स्वस्थ लोकतंत्र के लिए ऑनलाइन गुमनाम रहकर बोलने का सुरक्षित अधिकार ज़रूरी है।' },
-  { id: 'hi-hard-08', language: 'hi', difficulty: 'hard', category: 'सुरक्षा', prompt: 'पूर्णतः स्वायत्त हथियारों पर अंतरराष्ट्रीय कानून के तहत प्रतिबंध होना चाहिए।' },
-  { id: 'hi-hard-09', language: 'hi', difficulty: 'hard', category: 'जनस्वास्थ्य', prompt: 'घोषित वैश्विक स्वास्थ्य आपातकाल के दौरान दवाओं के पेटेंट संरक्षण को निलंबित कर देना चाहिए।' },
-  { id: 'hi-hard-10', language: 'hi', difficulty: 'hard', category: 'कर नीति', prompt: 'अर्जित आय पर कर की तुलना में विरासत में मिली संपत्ति पर कर अधिक न्यायसंगत है।' },
-  { id: 'hi-hard-11', language: 'hi', difficulty: 'hard', category: 'शासन', prompt: 'जटिल संकटों के दौरान स्वतंत्र विशेषज्ञ संस्थाओं के पास निर्वाचित नेताओं से अधिक नीतिगत अधिकार होना चाहिए।' },
-  { id: 'hi-hard-12', language: 'hi', difficulty: 'hard', category: 'गोपनीयता', prompt: 'डिजिटल गोपनीयता का अधिकार राष्ट्रीय सुरक्षा निगरानी की ज़रूरतों से अधिक महत्वपूर्ण होना चाहिए।' },
-];
+// Keep the original export name for existing callers and saved-history tests.
+export const TOPICS = ENGLISH_TOPICS;
 
 const TOPICS_BY_LANGUAGE: Record<SpeechLanguage, Topic[]> = {
-  en: TOPICS,
+  en: ENGLISH_TOPICS,
   bn: BENGALI_TOPICS,
   hi: HINDI_TOPICS,
 };
 
-export function randomTopic(difficulty: Difficulty, excludeId?: string, language: SpeechLanguage = 'en'): Topic {
+function weightedTopic(pool: Topic[], historyTopicIds: readonly string[]): Topic {
+  const historyCounts = new Map<string, number>();
+  historyTopicIds.forEach((id) => historyCounts.set(id, (historyCounts.get(id) ?? 0) + 1));
+
+  const unseen = pool.filter((topic) => !historyCounts.has(topic.id));
+  // Do not recycle a completed motion while this language/difficulty still has a
+  // fresh one. Once the tier is exhausted, prefer the least recent, least used item.
+  const candidates = unseen.length > 0 ? unseen : pool;
+  const weights = candidates.map((topic) => {
+    const count = historyCounts.get(topic.id) ?? 0;
+    if (count === 0) return 1;
+
+    // Attempts are stored newest-first, so recent and repeatedly used motions receive
+    // the smallest weight when the bank eventually has to recycle a topic.
+    const recentIndex = historyTopicIds.indexOf(topic.id);
+    const recencyFactor = recentIndex < 5 ? 0.04 : recentIndex < 20 ? 0.15 : 0.4;
+    return recencyFactor / (1 + count * 3);
+  });
+
+  const totalWeight = weights.reduce((total, weight) => total + weight, 0);
+  let target = Math.random() * totalWeight;
+  for (let index = 0; index < candidates.length; index += 1) {
+    target -= weights[index];
+    if (target <= 0) return candidates[index];
+  }
+  return candidates.at(-1) ?? pool[0];
+}
+
+export function randomTopic(
+  difficulty: Difficulty,
+  excludeId?: string,
+  language: SpeechLanguage = 'en',
+  historyTopicIds: readonly string[] = [],
+): Topic {
   const topics = TOPICS_BY_LANGUAGE[language];
   const pool = topics.filter((topic) => topic.difficulty === difficulty && topic.id !== excludeId);
-  return pool[Math.floor(Math.random() * pool.length)] ?? topics[0];
+  return pool.length > 0 ? weightedTopic(pool, historyTopicIds) : topics[0];
 }

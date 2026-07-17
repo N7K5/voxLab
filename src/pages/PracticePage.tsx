@@ -25,6 +25,7 @@ import {
   UserRound,
   UsersRound,
   Volume2,
+  X,
 } from 'lucide-react';
 import {
   useEffect,
@@ -36,6 +37,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { compareDuel } from '../analysis/duelComparison';
 import { runAnalysis, TranscriptionUnavailableError, type AnalysisProgress } from '../analysis/runAnalysis';
+import { disposeTopicVerifier, normalizeTopicDraft, topicDraftWordCount, verifyCustomTopic } from '../analysis/topicVerification';
 import { VoiceRecorder, type RecordingResult } from '../audio/recorder';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { Waveform } from '../components/Waveform';
@@ -55,6 +57,7 @@ import type {
 
 type PracticeStep = 'setup' | 'ready' | 'recording' | 'review' | 'processing' | 'manual' | 'handoff';
 type ProcessingPhase = 'voice' | 'transcript' | 'language' | 'coaching' | 'saving';
+type TopicCheckState = 'idle' | 'checking' | 'rejected';
 
 interface PendingDuelTurn {
   id: string;
@@ -112,7 +115,7 @@ function argueVerb(language: SpeechLanguage): string {
 }
 
 export function PracticePage() {
-  const { user, settings, config, saveAttempt, saveAttempts, storageStatus } = useApp();
+  const { user, settings, config, attempts, saveAttempt, saveAttempts, storageStatus } = useApp();
   const navigate = useNavigate();
   const initialLanguage = settings?.speechLanguage ?? config?.speech.language ?? 'en';
   const [step, setStep] = useState<PracticeStep>('setup');
@@ -122,8 +125,13 @@ export function PracticePage() {
   const [stance, setStance] = useState<Stance>('for');
   const [duration, setDuration] = useState(config?.practice.defaultDurationSeconds ?? 60);
   const [language, setLanguage] = useState<SpeechLanguage>(initialLanguage);
-  const [topic, setTopic] = useState<Topic>(() => randomTopic('easy', undefined, initialLanguage));
+  const [topic, setTopic] = useState<Topic>(() => randomTopic('easy', undefined, initialLanguage, attempts.map((attempt) => attempt.topic.id)));
+  const sessionTopicIdsRef = useRef<string[]>([topic.id]);
   const [drawingTopic, setDrawingTopic] = useState(false);
+  const [customTopicOpen, setCustomTopicOpen] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [topicCheckState, setTopicCheckState] = useState<TopicCheckState>('idle');
+  const [topicCheckMessage, setTopicCheckMessage] = useState('');
   const [recording, setRecording] = useState<RecordingResult | null>(null);
   const [levels, setLevels] = useState<number[]>([]);
   const [elapsed, setElapsed] = useState(0);
@@ -144,6 +152,9 @@ export function PracticePage() {
   const stoppingRef = useRef(false);
   const startingRef = useRef(false);
   const topicDrawTimerRef = useRef<number | null>(null);
+  const topicCheckRequestRef = useRef(0);
+  const topicCheckAbortRef = useRef<AbortController | null>(null);
+  const customTopicTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (user && speaker1Name === 'Speaker 1') setSpeaker1Name(user.username);
@@ -163,13 +174,23 @@ export function PracticePage() {
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
     if (topicDrawTimerRef.current !== null) window.clearTimeout(topicDrawTimerRef.current);
     recorderRef.current?.cancel();
+    topicCheckRequestRef.current += 1;
+    topicCheckAbortRef.current?.abort();
+    topicCheckAbortRef.current = null;
+    disposeTopicVerifier();
   }, []);
 
   if (!user || !settings || !config) return <div className="page-loading"><LoaderCircle className="spin" size={24} /> Preparing practice…</div>;
 
   const drawTopic = (nextDifficulty: Difficulty, excludeId?: string, nextLanguage: SpeechLanguage = language) => {
     if (topicDrawTimerRef.current !== null) window.clearTimeout(topicDrawTimerRef.current);
-    const nextTopic = randomTopic(nextDifficulty, excludeId, nextLanguage);
+    const nextTopic = randomTopic(
+      nextDifficulty,
+      excludeId,
+      nextLanguage,
+      [...sessionTopicIdsRef.current, ...attempts.map((attempt) => attempt.topic.id)],
+    );
+    sessionTopicIdsRef.current.unshift(nextTopic.id);
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setDrawingTopic(true);
     topicDrawTimerRef.current = window.setTimeout(() => {
@@ -192,6 +213,85 @@ export function PracticePage() {
 
   const shuffleTopic = () => {
     if (!drawingTopic) drawTopic(difficulty, topic.id);
+  };
+
+  const closeCustomTopic = () => {
+    topicCheckRequestRef.current += 1;
+    topicCheckAbortRef.current?.abort();
+    topicCheckAbortRef.current = null;
+    disposeTopicVerifier();
+    setCustomTopicOpen(false);
+    setTopicCheckState('idle');
+    setTopicCheckMessage('');
+    window.requestAnimationFrame(() => customTopicTriggerRef.current?.focus());
+  };
+
+  const openCustomTopic = () => {
+    if (topicDrawTimerRef.current !== null) window.clearTimeout(topicDrawTimerRef.current);
+    topicDrawTimerRef.current = null;
+    topicCheckRequestRef.current += 1;
+    topicCheckAbortRef.current?.abort();
+    topicCheckAbortRef.current = null;
+    disposeTopicVerifier();
+    setDrawingTopic(false);
+    setCustomPrompt(topic.id.startsWith('custom-') ? topic.prompt : '');
+    setTopicCheckState('idle');
+    setTopicCheckMessage('');
+    setCustomTopicOpen(true);
+  };
+
+  const submitCustomTopic = async (event: FormEvent) => {
+    event.preventDefault();
+    if (topicCheckState === 'checking') return;
+    const prompt = normalizeTopicDraft(customPrompt);
+    const requestId = topicCheckRequestRef.current + 1;
+    topicCheckRequestRef.current = requestId;
+    topicCheckAbortRef.current?.abort();
+    const controller = new AbortController();
+    topicCheckAbortRef.current = controller;
+    setTopicCheckState('checking');
+    setTopicCheckMessage('Starting the AI topic check…');
+    try {
+      const result = await verifyCustomTopic({
+        prompt,
+        language,
+        settings: {
+          ...settings,
+          ...(storageStatus?.kind === 'browser' ? { ollamaViaServer: false } : {}),
+        },
+        apiBaseUrl: config.storage.apiBaseUrl,
+        signal: controller.signal,
+        onProgress: (message) => {
+          if (topicCheckRequestRef.current === requestId) setTopicCheckMessage(message);
+        },
+      });
+      if (topicCheckRequestRef.current !== requestId) return;
+      if (!result.accepted) {
+        setTopicCheckState('rejected');
+        setTopicCheckMessage(result.reason);
+        return;
+      }
+      setTopic({
+        id: `custom-${crypto.randomUUID()}`,
+        language,
+        difficulty,
+        category: language === 'bn' ? 'নিজস্ব বিষয়' : language === 'hi' ? 'अपना विषय' : 'Custom topic',
+        prompt,
+      });
+      setCustomPrompt('');
+      setCustomTopicOpen(false);
+      setTopicCheckState('idle');
+      setTopicCheckMessage('');
+      disposeTopicVerifier();
+      window.requestAnimationFrame(() => customTopicTriggerRef.current?.focus());
+    } catch (verificationError) {
+      if (topicCheckRequestRef.current !== requestId) return;
+      if (verificationError instanceof DOMException && verificationError.name === 'AbortError') return;
+      setTopicCheckState('rejected');
+      setTopicCheckMessage(errorMessage(verificationError));
+    } finally {
+      if (topicCheckRequestRef.current === requestId) topicCheckAbortRef.current = null;
+    }
   };
 
   const prepare = () => {
@@ -460,19 +560,90 @@ export function PracticePage() {
             </section>
           </div>
 
+          <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{drawingTopic ? `Drawing ${difficulty === 'easy' ? 'an' : 'a'} ${difficulty} prompt` : `Current prompt: ${topic.prompt}`}</span>
           <aside className={`topic-preview-card${drawingTopic ? ' is-drawing' : ''}`} aria-busy={drawingTopic}>
-            {drawingTopic && <div className="topic-draw-overlay" role="status"><span className="topic-draw-icon"><Dices size={24} /></span><strong>Drawing {difficulty === 'easy' ? 'an' : 'a'} {difficulty} prompt</strong><span className="topic-draw-dots" aria-hidden="true"><i /><i /><i /></span></div>}
-            <div key={topic.id} className="topic-preview-content" aria-live="polite">
+            {drawingTopic && <div className="topic-draw-overlay" aria-hidden="true"><span className="topic-draw-icon"><Dices size={24} /></span><strong>Drawing {difficulty === 'easy' ? 'an' : 'a'} {difficulty} prompt</strong><span className="topic-draw-dots"><i /><i /><i /></span></div>}
+            <div key={topic.id} className="topic-preview-content">
               <div className="topic-preview-top"><span className={`difficulty-pill ${topic.difficulty}`}>{topic.difficulty}</span><span lang={language}>{topic.category}</span></div>
               <div className="topic-quote-mark">“</div>
               <h2 lang={language}>{topic.prompt}</h2>
               <p lang={language}>{practiceMode === 'duel' ? (language === 'bn' ? 'প্রথম বক্তা একটি এলোমেলো পক্ষ পাবেন। দ্বিতীয় বক্তা বিপরীত পক্ষ নেবেন।' : language === 'hi' ? 'पहले वक्ता को कोई एक पक्ष मिलेगा। दूसरे वक्ता को उसका विपरीत पक्ष मिलेगा।' : 'Speaker 1 gets a random side. Speaker 2 takes the opposite.') : stanceMode === 'game' ? (language === 'bn' ? 'বিষয়টি নিশ্চিত করলে আপনার পক্ষ দেখানো হবে।' : language === 'hi' ? 'विषय चुनने के बाद आपका पक्ष दिखाया जाएगा।' : 'Your side will be revealed when you lock in this prompt.') : language === 'bn' ? `আপনি ${stanceLabel(stance, language)} কথা বলবেন।` : language === 'hi' ? `आप ${stanceLabel(stance, language)} में बोलेंगे।` : `You will argue ${stanceLabel(stance, language)}.`}</p>
-              <button className="shuffle-button" type="button" disabled={drawingTopic} onClick={shuffleTopic}>{drawingTopic ? <Dices size={16} /> : <RefreshCw size={16} />} {drawingTopic ? 'Drawing…' : 'Draw another prompt'}</button>
+              <div className="topic-choice-actions">
+                <button className="shuffle-button" type="button" disabled={drawingTopic} onClick={shuffleTopic}>{drawingTopic ? <Dices size={16} /> : <RefreshCw size={16} />} {drawingTopic ? 'Drawing…' : 'Draw another prompt'}</button>
+                <button ref={customTopicTriggerRef} className="custom-topic-button" type="button" disabled={drawingTopic} onClick={openCustomTopic}><FilePenLine size={13} /> Choose yourself</button>
+              </div>
+              {topic.id.startsWith('custom-') && <span className="custom-topic-badge"><Sparkles size={12} /> AI-screened custom motion</span>}
               <div className="topic-preview-footer"><span><Clock3 size={15} /> {formatTime(duration)}{practiceMode === 'duel' ? ' each' : ''}</span><span><CircleDot size={15} /> {practiceMode === 'duel' ? 'Local 1v1' : stanceMode === 'game' ? (language === 'bn' ? 'এলোমেলো পক্ষ' : language === 'hi' ? 'यादृच्छिक पक्ष' : 'Random side') : stanceLabel(stance, language)}</span></div>
               <button className="button primary large full" type="button" disabled={drawingTopic} onClick={prepare}>{practiceMode === 'duel' ? 'Start the 1v1' : 'Lock it in'} <ChevronRight size={18} /></button>
             </div>
           </aside>
         </div>
+
+        {customTopicOpen && (
+          <div className="dialog-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeCustomTopic(); }}>
+            <section
+              className="dialog-card custom-topic-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="custom-topic-title"
+              aria-describedby="custom-topic-description"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  closeCustomTopic();
+                  return;
+                }
+                if (event.key !== 'Tab') return;
+                const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'));
+                const first = focusable[0];
+                const last = focusable.at(-1);
+                if (!first || !last) return;
+                if (event.shiftKey && (document.activeElement === first || !event.currentTarget.contains(document.activeElement))) {
+                  event.preventDefault();
+                  last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first.focus();
+                }
+              }}
+            >
+              <button className="icon-button dialog-close" type="button" onClick={closeCustomTopic} aria-label="Close custom topic dialog"><X size={18} /></button>
+              <span className="dialog-icon"><FilePenLine size={22} /></span>
+              <h2 id="custom-topic-title">Choose your own motion</h2>
+              <p id="custom-topic-description" className="dialog-description">Write one position that could reasonably be argued both for and against. The checker looks for breadth, clarity, and balance before it can enter the round.</p>
+              <form className="custom-topic-form" aria-busy={topicCheckState === 'checking'} onSubmit={(event) => void submitCustomTopic(event)}>
+                <label htmlFor="custom-topic-input">
+                  <span>Your debate motion</span>
+                  <textarea
+                    id="custom-topic-input"
+                    lang={language}
+                    rows={4}
+                    maxLength={260}
+                    value={customPrompt}
+                    autoFocus
+                    disabled={topicCheckState === 'checking'}
+                    aria-describedby={`custom-topic-meta${topicCheckMessage ? ' custom-topic-result' : ''}`}
+                    aria-invalid={topicCheckState === 'rejected'}
+                    onChange={(event) => {
+                      setCustomPrompt(event.target.value);
+                      setTopicCheckState('idle');
+                      setTopicCheckMessage('');
+                    }}
+                    placeholder={language === 'bn' ? 'বিদ্যালয়ে একটি পরীক্ষার বদলে ব্যবহারিক প্রকল্প রাখা উচিত।' : language === 'hi' ? 'विद्यालयों में एक परीक्षा की जगह व्यावहारिक परियोजना होनी चाहिए।' : 'Schools should replace one exam with a practical project.'}
+                    required
+                  />
+                </label>
+                <div id="custom-topic-meta" className="custom-topic-meta"><span>{topicDraftWordCount(customPrompt)} / 35 words</span><span>{customPrompt.length} / 260 characters</span></div>
+                {topicCheckMessage && <div id="custom-topic-result" className={`topic-check-result ${topicCheckState}`} role={topicCheckState === 'rejected' ? 'alert' : 'status'} aria-atomic="true">{topicCheckState === 'checking' ? <LoaderCircle className="spin" size={15} /> : <TriangleAlert size={15} />}<span>{topicCheckMessage}</span></div>}
+                <p className="custom-topic-privacy"><ShieldCheck size={14} /> {settings.aiProvider === 'ollama' ? `The motion text—not audio—is sent to the configured Ollama endpoint for ${settings.ollamaModel}. If it fails, the on-device fallback may download and cache roughly 360 MB.` : 'Screened on this device by the multilingual browser model. Its first use may download and cache roughly 360 MB.'}</p>
+                <div className="dialog-actions">
+                  <button className="button secondary" type="button" onClick={closeCustomTopic}>Cancel</button>
+                  <button className="button primary" type="submit" disabled={topicCheckState === 'checking' || !customPrompt.trim()}>{topicCheckState === 'checking' ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}{topicCheckState === 'checking' ? 'Checking motion…' : 'Check and use motion'}</button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
       </div>
     );
   }

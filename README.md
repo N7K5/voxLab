@@ -14,7 +14,9 @@ Ollama is not used as an audio model. The browser measures pauses, pace, loudnes
 ## What is included
 
 - Username/password signup and login with no email verification
-- 144 curated easy, medium, and hard prompts across English, Bengali, and Hindi
+- 900 curated prompts: 100 easy, 100 medium, and 100 hard motions in each of English, Bengali, and Hindi
+- History-aware topic draws that avoid completed motions until the selected tier is exhausted
+- AI-screened custom motions from the compact “Choose yourself” flow
 - User-selected or game-mode For/Against stances
 - Local 1v1 rounds with random opposite sides, sealed device handoff, and a shared score comparison
 - Adjustable 30–180 second timer (60 seconds by default)
@@ -43,6 +45,8 @@ npm run dev
 Open `http://localhost:5173`. The API also starts on `http://localhost:8787`. With no database configuration, the app automatically uses IndexedDB in the current browser.
 
 The first analysis downloads the configured Whisper ONNX model. The recommended semantic stance checker downloads a separate multilingual NLI model of roughly 360 MB and supports English, Bengali, and Hindi. Models are cached when the browser permits it. Microphone access requires `localhost` or HTTPS.
+
+Custom motions receive a quick structural precheck followed by an AI suitability check for clarity, breadth, and reasonable arguments on both sides. An accepted motion is used for the current round and is stored with that attempt in history. The browser suitability screen uses the same multilingual local NLI model as semantic stance checking, so its first custom check may trigger that roughly 360 MB download. When Ollama coaching is selected, only the custom motion text is sent to the configured Ollama endpoint; if it is unavailable, VoxLab falls back to the browser model. This is a debate-suitability screen, not a factual accuracy guarantee.
 
 ## Deploy the browser-only app to GitHub Pages
 

@@ -117,6 +117,14 @@ app.post('/api/ai/coach', coachAccess, coachRateLimit, async (request, response,
   activeCoachRequests.add(requestKey);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120_000);
+  let clientDisconnected = false;
+  const abortForDisconnect = () => {
+    if (response.writableEnded) return;
+    clientDisconnected = true;
+    controller.abort();
+  };
+  request.once('aborted', abortForDisconnect);
+  response.once('close', abortForDisconnect);
   try {
     const body = validateCoachRequest(request.body);
     const upstream = await fetch(`${config.ollama.endpoint}/api/chat`, {
@@ -150,12 +158,16 @@ app.post('/api/ai/coach', coachAccess, coachRateLimit, async (request, response,
     response.json(payload);
   } catch (error) {
     if (controller.signal.aborted) {
-      response.status(504).json({ error: 'Ollama did not respond before the timeout.' });
+      if (!clientDisconnected && !response.writableEnded) {
+        response.status(504).json({ error: 'Ollama did not respond before the timeout.' });
+      }
       return;
     }
     next(error);
   } finally {
     clearTimeout(timeout);
+    request.removeListener('aborted', abortForDisconnect);
+    response.removeListener('close', abortForDisconnect);
     activeCoachRequests.delete(requestKey);
   }
 });
