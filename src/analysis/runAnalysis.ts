@@ -6,6 +6,7 @@ import { browserFeedback, calculateScores } from './scoring';
 import { analyzeStanceSemantically, mergeStanceAssessment } from './stanceAnalysis';
 import { analyzeText } from './textAnalysis';
 import { transcribeLocally, type TranscriptionProgress } from './transcribe';
+import { modelForSpeechLanguage } from '../lib/speechLanguages';
 
 export class TranscriptionUnavailableError extends Error {
   constructor(message: string) {
@@ -31,6 +32,7 @@ export async function runAnalysis(input: {
   onProgress?: (progress: AnalysisProgress) => void;
 }): Promise<{ transcript: string; report: AnalysisReport }> {
   const pcm16 = resampleTo16Khz(input.pcm, input.sampleRate);
+  const speechLanguage = input.topic.language ?? input.settings.speechLanguage ?? 'en';
   input.onProgress?.({ stage: 'audio', message: 'Measuring pace, pauses, energy, and pitch…' });
   const originalClippingRatio = calculateClippingRatio(input.pcm);
   const audioPromise = analyzeAudio(pcm16).then((audio) => ({ ...audio, clippingRatio: originalClippingRatio }));
@@ -40,8 +42,9 @@ export async function runAnalysis(input: {
   if (!transcript) {
     try {
       const transcription = await transcribeLocally(pcm16, {
-        model: input.settings.whisperModel,
+        model: modelForSpeechLanguage(input.settings.whisperModel, speechLanguage),
         device: input.settings.whisperDevice,
+        language: speechLanguage,
         onProgress: (progress: TranscriptionProgress) => input.onProgress?.(progress),
       });
       transcript = transcription.text;
@@ -65,7 +68,7 @@ export async function runAnalysis(input: {
   input.onProgress?.({ stage: 'language', message: 'Checking fluency, vocabulary, structure, and relevance…' });
   let text = analyzeText(transcript, input.topic, input.stance, audio);
   let analysisWarning: string | undefined;
-  if (input.settings.stanceAnalysis === 'semantic') {
+  if (input.settings.stanceAnalysis === 'semantic' && speechLanguage === 'en') {
     try {
       const semanticStance = await analyzeStanceSemantically({
         transcript,
@@ -80,6 +83,8 @@ export async function runAnalysis(input: {
     } catch (error) {
       analysisWarning = `Semantic stance checking was unavailable, so fast phrase signals were used: ${error instanceof Error ? error.message : 'unknown error'}`;
     }
+  } else if (input.settings.stanceAnalysis === 'semantic' && speechLanguage === 'bn') {
+    analysisWarning = 'The current semantic stance model is English-only, so Bengali phrase and topic signals were used for this attempt.';
   }
   const scores = calculateScores(audio, text);
   let feedback = browserFeedback(scores, audio, text, {

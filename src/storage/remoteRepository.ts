@@ -1,4 +1,5 @@
 import type { PracticeAttempt, User, UserSettings } from '../types';
+import { isSpeechLanguage, modelForSpeechLanguage } from '../lib/speechLanguages';
 import type { AppRepository } from './repository';
 
 class ApiError extends Error {
@@ -145,7 +146,11 @@ export class RemoteRepository implements AppRepository {
 
   async loadSettings(defaults: UserSettings): Promise<UserSettings> {
     const stored = await this.request<Partial<UserSettings> | null>('/settings');
-    return { ...defaults, ...(stored ?? {}) };
+    const merged = { ...defaults, ...(stored ?? {}) };
+    merged.speechLanguage = isSpeechLanguage(merged.speechLanguage) ? merged.speechLanguage : 'en';
+    merged.whisperModel = modelForSpeechLanguage(merged.whisperModel, merged.speechLanguage);
+    if (merged.speechLanguage === 'bn') merged.stanceAnalysis = 'signals';
+    return merged;
   }
 
   saveSettings(settings: UserSettings): Promise<void> {

@@ -2,7 +2,7 @@ import { HardDrive, X } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
-const DISMISSED_KEY = 'voxlab-local-banner-v1';
+const DISMISSED_KEY = 'voxlab-local-banner-v2';
 
 function wasDismissed(): boolean {
   try {
@@ -31,7 +31,7 @@ export function LocalModeBanner() {
     <div className="local-mode-banner" role="status">
       <div>
         <HardDrive size={15} />
-        <p><strong>Running locally in your browser.</strong> Your account, history, analytics, and saved recordings stay on this device.</p>
+        <p><strong>Stored locally in your browser.</strong> Your account, history, analytics, and saved recordings are kept on this device. Optional Ollama and network voices share only the content disclosed beside those controls.</p>
       </div>
       <button type="button" onClick={dismiss} aria-label="Dismiss local mode notice" title="Dismiss">
         <X size={15} />

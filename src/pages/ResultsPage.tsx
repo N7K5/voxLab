@@ -204,13 +204,13 @@ export function ResultsPage() {
 
           <article className="result-card transcript-card">
             <div className="card-heading"><span className="card-icon"><FileText size={18} /></span><div><span className="eyebrow">Transcript</span><h2>Your argument in words</h2></div></div>
-            <blockquote>{attempt.transcript}</blockquote>
+            <blockquote lang={attempt.topic.language === 'bn' ? 'bn' : undefined}>{attempt.transcript}</blockquote>
             <div className="transcript-footer"><span>{report.text.wordCount} words</span><span>{report.text.sentenceCount} sentences</span><span>{report.transcriptionEngine}</span></div>
           </article>
         </div>
 
         <aside className="results-aside-column">
-          <article className="result-card spoken-coach-card"><div className="card-heading"><span className="card-icon"><Volume2 size={18} /></span><div><span className="eyebrow">Spoken coaching</span><h2>Hear the first priority</h2></div></div><SpokenCoach key={id} feedback={report.feedback} /></article>
+          <article className="result-card spoken-coach-card"><div className="card-heading"><span className="card-icon"><Volume2 size={18} /></span><div><span className="eyebrow">Spoken coaching</span><h2>Hear the first priority</h2></div></div><SpokenCoach key={id} feedback={report.feedback} language={attempt.topic.language ?? report.feedback.language ?? 'en'} /></article>
 
           {audioUrl && <article className="result-card audio-card" id="recording"><span className="card-icon"><Volume2 size={18} /></span><div><span className="eyebrow">Saved recording</span><h2>Listen for the evidence</h2><p>Replay once while reading the notes. Focus on only one improvement.</p></div><AudioPlayer src={audioUrl} fallbackDuration={attempt.durationSeconds} compact /></article>}
 
@@ -243,7 +243,7 @@ export function ResultsPage() {
               <div><span><FileText size={15} /> Content words</span><strong>{Math.round((report.text.contentWordRatio ?? 0) * 100)}%</strong></div>
               <div><span><AlignLeft size={15} /> Sentence rhythm</span><strong>{metric(report.text.averageSentenceWords ?? 0, ' avg', 1)}</strong></div>
             </div>
-            <p className="local-analysis-note">Stance: {report.text.stanceEngine ?? 'legacy phrase signals'}. Semantic NLI compares the transcript with the motion, but can still miss sarcasm, mixed rebuttals, or transcription errors.</p>
+            <p className="local-analysis-note">Stance: {report.text.stanceEngine ?? 'legacy phrase signals'}. {attempt.topic.language === 'bn' ? 'Bengali currently uses phrase and topic signals; explicitly stating পক্ষে or বিপক্ষে gives the checker stronger evidence.' : 'Semantic NLI compares the transcript with the motion, but can still miss sarcasm, mixed rebuttals, or transcription errors.'}</p>
           </article>
 
           <Link className="next-practice-card" to="/practice"><span><small>Next rep</small><strong>Apply one coaching note</strong></span><ArrowRight size={19} /></Link>

@@ -9,12 +9,12 @@ It supports two independent choices:
 - **Storage:** browser-only IndexedDB, or PostgreSQL through the included API server.
 - **Coaching:** deterministic in-browser coaching, or an Ollama model for richer transcript-based feedback.
 
-Ollama is not used as an audio model. The browser measures pauses, pace, loudness, clipping, and pitch variation, while a local Whisper model produces the transcript. Ollama receives only the transcript and measured analytics.
+Ollama is not used as an audio model. The browser measures pauses, pace, loudness, clipping, and pitch variation, while a local Whisper model produces the transcript. When enabled, Ollama receives the topic, assigned stance, transcript, measured analytics, and score—but never the voice recording.
 
 ## What is included
 
 - Username/password signup and login with no email verification
-- 72 curated easy, medium, and hard prompts
+- 108 curated easy, medium, and hard prompts across English and Bengali
 - User-selected or game-mode For/Against stances
 - Local 1v1 rounds with random opposite sides, sealed device handoff, and a shared score comparison
 - Adjustable 30–180 second timer (60 seconds by default)
@@ -23,7 +23,7 @@ Ollama is not used as an audio model. The browser measures pauses, pace, loudnes
 - Pause, silence, pacing, filler, vocabulary, structure, relevance, semantic stance, argument-evidence, pitch, volume, and clipping analytics
 - Browser-generated feedback that works without an LLM
 - Optional structured coaching from Ollama
-- Evidence-backed weaknesses, transcript quotations and reframes, topic strategy, and spoken coaching with an installed on-device voice
+- Evidence-backed weaknesses, transcript quotations and reframes, topic strategy, and spoken coaching with ranked English/Bengali voices
 - Attempt history, saved playback, per-attempt deletion, and account deletion
 - Optional recording retention
 - Persistent system, dark, light, and dusk themes
@@ -40,7 +40,7 @@ npm run dev
 
 Open `http://localhost:5173`. The API also starts on `http://localhost:8787`. With no database configuration, the app automatically uses IndexedDB in the current browser.
 
-The first analysis downloads the configured Whisper ONNX model. The recommended semantic stance checker downloads a separate roughly 100 MB English NLI model. They are then cached when the browser permits it. Microphone access requires `localhost` or HTTPS.
+The first analysis downloads the configured Whisper ONNX model. English can also use the recommended semantic stance checker, which downloads a separate roughly 100 MB English NLI model. Bengali uses multilingual Whisper plus local Bengali phrase and topic signals. Models are cached when the browser permits it. Microphone access requires `localhost` or HTTPS.
 
 ## Deploy the browser-only app to GitHub Pages
 
@@ -77,7 +77,7 @@ Every later push to `main` runs the checks and deploys the updated browser app a
 
 - Username/password accounts, settings, history, analytics, transcripts, and enabled recordings are stored in that visitor's IndexedDB.
 - Microphone capture and local acoustic analysis run in the page over HTTPS.
-- Whisper and the optional semantic stance model download from Hugging Face on first use, then use that browser's model cache.
+- English or multilingual Whisper—and the optional English semantic stance model—download from Hugging Face on first use, then use that browser's model cache.
 - The deterministic browser coach works without any server or Ollama installation.
 - A visitor may choose Ollama only if Ollama is running on their own computer and allows the exact Pages origin. Pages never exposes your computer's Ollama instance.
 
@@ -114,6 +114,8 @@ Edit [`public/app.config.json`](public/app.config.json) for non-secret defaults:
   }
 }
 ```
+
+Set `speech.language` to `en` or `bn`. If Bengali is selected while an English-only `.en` model is configured, VoxLab automatically chooses the matching multilingual Whisper tier.
 
 Storage modes:
 
@@ -190,13 +192,13 @@ The browser path is fully useful without Ollama:
 
 1. Raw microphone PCM and a compressed playback recording are captured locally.
 2. A small Whisper model runs locally via WebGPU when available, with WASM fallback.
-3. Deterministic signal and language analysis computes the metrics; the recommended local NLI model compares the transcript with the assigned motion.
+3. Deterministic signal and language analysis computes the metrics; for English, the recommended local NLI model can compare the transcript with the assigned motion. Bengali uses Bengali-specific phrase, structure, and topic signals.
 4. A local rules-based coach produces evidence-backed strengths, weaknesses, reframes, strategy, and drills.
-5. Spoken coaching uses a voice installed on the device. It does not send the recording anywhere or save generated coaching audio.
+5. Spoken coaching uses a language-matched voice, shorter conversational phrasing, sentence pauses, and adjustable speed/pitch. On-device voices remain the default; users can explicitly opt into a browser-provided network voice when they prefer its sound.
 
 Model files are downloaded from Hugging Face on first use unless you self-host them. Once loaded, inference itself happens in the browser. Transcription does not use the browser Web Speech recognition API, which can route audio to a browser vendor.
 
-The microphone recording is never sent through browser speech-recognition services. Spoken coaching does use the Web Speech synthesis API, but VoxLab only offers voices that the browser marks as `localService`; availability and quality therefore depend on the operating system.
+The microphone recording is never sent through browser speech-recognition services. Spoken coaching uses the Web Speech synthesis API. On-device voice availability and quality depend on the operating system; enabling a network voice may send only the generated coaching text—not the recording—to the browser's speech provider, and the UI discloses that before use.
 
 ### Browser model tiers
 
@@ -207,7 +209,15 @@ The Settings page exposes four English transcription tiers:
 - **Accurate:** Distil Whisper Small English; WebGPU recommended
 - **Maximum:** Whisper Small English; large download and a powerful desktop recommended
 
-The two larger options improve transcription at a real compute and memory cost. The maximum tier can approach a 1 GB first-time load on WebGPU. The semantic stance checker is separately switchable between the recommended local NLI model and fast phrase signals.
+The two larger options improve transcription at a real compute and memory cost. The maximum tier uses roughly 600 MB of model weights on WebGPU and needs additional runtime memory. The semantic stance checker is separately switchable between the recommended local NLI model and fast phrase signals.
+
+For Bengali, VoxLab switches to multilingual Whisper:
+
+- **Fast:** Whisper Tiny Multilingual
+- **Balanced:** Whisper Base Multilingual
+- **Accurate:** Whisper Small Multilingual; roughly 250 MB with quantized browser CPU weights
+
+Bengali recognition can vary with accent, microphone quality, and code-switching. The English-only semantic stance model is intentionally not run on Bengali; explicitly stating `পক্ষে` or `বিপক্ষে` gives the Bengali stance checker stronger evidence. A capable Ollama model is prompted to return Bengali coaching for Bengali attempts.
 
 ## About emotion and “confidence”
 

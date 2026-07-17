@@ -1,4 +1,4 @@
-import type { Difficulty, Topic } from '../types';
+import type { Difficulty, SpeechLanguage, Topic } from '../types';
 
 export const TOPICS: Topic[] = [
   { id: 'easy-01', difficulty: 'easy', category: 'Everyday life', prompt: 'Homework should be optional on weekends.' },
@@ -77,7 +77,49 @@ export const TOPICS: Topic[] = [
   { id: 'hard-24', difficulty: 'hard', category: 'Governance', prompt: 'Independent expert agencies should have more policy authority than elected officials during complex crises.' },
 ];
 
-export function randomTopic(difficulty: Difficulty, excludeId?: string): Topic {
-  const pool = TOPICS.filter((topic) => topic.difficulty === difficulty && topic.id !== excludeId);
-  return pool[Math.floor(Math.random() * pool.length)] ?? TOPICS[0];
+export const BENGALI_TOPICS: Topic[] = [
+  { id: 'bn-easy-01', language: 'bn', difficulty: 'easy', category: 'শিক্ষা', prompt: 'সপ্তাহান্তে শিক্ষার্থীদের বাড়ির কাজ ঐচ্ছিক হওয়া উচিত।' },
+  { id: 'bn-easy-02', language: 'bn', difficulty: 'easy', category: 'প্রযুক্তি', prompt: 'বিদ্যালয়ে শিক্ষার্থীদের মোবাইল ফোন ব্যবহার করতে দেওয়া উচিত।' },
+  { id: 'bn-easy-03', language: 'bn', difficulty: 'easy', category: 'পড়াশোনা', prompt: 'ই-বুকের চেয়ে মুদ্রিত বই ভালো।' },
+  { id: 'bn-easy-04', language: 'bn', difficulty: 'easy', category: 'কর্মজীবন', prompt: 'অফিসে কাজ করার চেয়ে বাড়ি থেকে কাজ করা ভালো।' },
+  { id: 'bn-easy-05', language: 'bn', difficulty: 'easy', category: 'কর্মজীবন', prompt: 'চার দিনের কর্মসপ্তাহ সাধারণ নিয়ম হওয়া উচিত।' },
+  { id: 'bn-easy-06', language: 'bn', difficulty: 'easy', category: 'জীবনদক্ষতা', prompt: 'প্রত্যেকের রান্না শেখা উচিত।' },
+  { id: 'bn-easy-07', language: 'bn', difficulty: 'easy', category: 'খেলাধুলা', prompt: 'ব্যক্তিগত খেলার চেয়ে দলগত খেলা বেশি দরকারি দক্ষতা শেখায়।' },
+  { id: 'bn-easy-08', language: 'bn', difficulty: 'easy', category: 'উপহার', prompt: 'জিনিসের চেয়ে অভিজ্ঞতা ভালো জন্মদিনের উপহার।' },
+  { id: 'bn-easy-09', language: 'bn', difficulty: 'easy', category: 'বিদ্যালয়', prompt: 'সকালে বিদ্যালয় আরও দেরিতে শুরু হওয়া উচিত।' },
+  { id: 'bn-easy-10', language: 'bn', difficulty: 'easy', category: 'নগরজীবন', prompt: 'প্রতিটি পাড়ায় হাঁটার দূরত্বে একটি জনসাধারণের পার্ক থাকা উচিত।' },
+  { id: 'bn-easy-11', language: 'bn', difficulty: 'easy', category: 'সম্পর্ক', prompt: 'অনেক পরিচিত মানুষের চেয়ে অল্প কয়েকজন ঘনিষ্ঠ বন্ধু থাকা ভালো।' },
+  { id: 'bn-easy-12', language: 'bn', difficulty: 'easy', category: 'ভ্রমণ', prompt: 'আগে থেকে ভালোভাবে পরিকল্পনা করলে ছুটি বেশি উপভোগ্য হয়।' },
+
+  { id: 'bn-medium-01', language: 'bn', difficulty: 'medium', category: 'শিক্ষা', prompt: 'সবার জন্য বিশ্ববিদ্যালয় শিক্ষা বিনামূল্যে হওয়া উচিত।' },
+  { id: 'bn-medium-02', language: 'bn', difficulty: 'medium', category: 'কৃত্রিম বুদ্ধিমত্তা', prompt: 'কৃত্রিম বুদ্ধিমত্তায় তৈরি সব কনটেন্টে দৃশ্যমান লেবেল থাকা উচিত।' },
+  { id: 'bn-medium-03', language: 'bn', difficulty: 'medium', category: 'পরিবহন', prompt: 'বড় শহরে জনপরিবহন বিনামূল্যে হওয়া উচিত।' },
+  { id: 'bn-medium-04', language: 'bn', difficulty: 'medium', category: 'কর্মসংস্থান', prompt: 'প্রতিটি চাকরির বিজ্ঞাপনে বেতনের সীমা প্রকাশ করা উচিত।' },
+  { id: 'bn-medium-05', language: 'bn', difficulty: 'medium', category: 'কর্মজীবন', prompt: 'কাজের সময়ের বাইরে অফিসের বার্তা উপেক্ষা করার আইনি অধিকার কর্মীদের থাকা উচিত।' },
+  { id: 'bn-medium-06', language: 'bn', difficulty: 'medium', category: 'সামাজিক মাধ্যম', prompt: 'সামাজিক মাধ্যম প্রতিষ্ঠানগুলোর প্রত্যেক ব্যবহারকারীর বয়স যাচাই করা উচিত।' },
+  { id: 'bn-medium-07', language: 'bn', difficulty: 'medium', category: 'স্বাস্থ্য', prompt: 'অতিরিক্ত চিনিযুক্ত খাবারের ওপর সরকারের বেশি কর আরোপ করা উচিত।' },
+  { id: 'bn-medium-08', language: 'bn', difficulty: 'medium', category: 'সংস্কৃতি', prompt: 'জাদুঘরগুলোর ঐতিহাসিক নিদর্শন তাদের উৎস দেশে ফিরিয়ে দেওয়া উচিত।' },
+  { id: 'bn-medium-09', language: 'bn', difficulty: 'medium', category: 'শিক্ষা', prompt: 'দূরবর্তী পরীক্ষায় নজরদারি সফটওয়্যার নিষিদ্ধ করা উচিত।' },
+  { id: 'bn-medium-10', language: 'bn', difficulty: 'medium', category: 'গণতন্ত্র', prompt: 'যোগ্য নাগরিকদের জন্য ভোট দেওয়া বাধ্যতামূলক হওয়া উচিত।' },
+  { id: 'bn-medium-11', language: 'bn', difficulty: 'medium', category: 'ভোক্তা অধিকার', prompt: 'ইলেকট্রনিক যন্ত্র সহজে মেরামতযোগ্য করা নির্মাতাদের জন্য বাধ্যতামূলক হওয়া উচিত।' },
+  { id: 'bn-medium-12', language: 'bn', difficulty: 'medium', category: 'পর্যটন', prompt: 'জনপ্রিয় পর্যটনকেন্দ্রে প্রতিদিনের দর্শনার্থীর সংখ্যা সীমিত করা উচিত।' },
+
+  { id: 'bn-hard-01', language: 'bn', difficulty: 'hard', category: 'অর্থনীতি', prompt: 'লক্ষ্যভিত্তিক কল্যাণ কর্মসূচির চেয়ে সর্বজনীন মৌলিক আয় ভালো।' },
+  { id: 'bn-hard-02', language: 'bn', difficulty: 'hard', category: 'প্রযুক্তি', prompt: 'শক্তিশালী কৃত্রিম বুদ্ধিমত্তা ব্যবস্থা চালুর আগে সরকারি লাইসেন্স বাধ্যতামূলক হওয়া উচিত।' },
+  { id: 'bn-hard-03', language: 'bn', difficulty: 'hard', category: 'জলবায়ু', prompt: 'দেশগুলোর নিঃসরণ কমানোর চেয়ে জলবায়ু পরিবর্তনের সঙ্গে অভিযোজনকে অগ্রাধিকার দেওয়া উচিত।' },
+  { id: 'bn-hard-04', language: 'bn', difficulty: 'hard', category: 'মতপ্রকাশ', prompt: 'ব্যবহারকারীর ক্ষতিকর ভুল তথ্যের জন্য অনলাইন প্ল্যাটফর্মকে আইনিভাবে দায়ী করা উচিত।' },
+  { id: 'bn-hard-05', language: 'bn', difficulty: 'hard', category: 'নৈতিকতা', prompt: 'কঠোর নিয়ন্ত্রণের অধীনে মানুষের জিনগত উন্নয়ন অনুমোদন করা উচিত।' },
+  { id: 'bn-hard-06', language: 'bn', difficulty: 'hard', category: 'আন্তর্জাতিক সম্পর্ক', prompt: 'অর্থনৈতিক নিষেধাজ্ঞা উপকারের চেয়ে বেশি ক্ষতি করে।' },
+  { id: 'bn-hard-07', language: 'bn', difficulty: 'hard', category: 'মতপ্রকাশ', prompt: 'সুস্থ গণতন্ত্রের জন্য অনলাইনে পরিচয় গোপন রেখে কথা বলার অধিকার সুরক্ষিত থাকা দরকার।' },
+  { id: 'bn-hard-08', language: 'bn', difficulty: 'hard', category: 'নিরাপত্তা', prompt: 'সম্পূর্ণ স্বয়ংক্রিয় অস্ত্র আন্তর্জাতিক আইনে নিষিদ্ধ করা উচিত।' },
+  { id: 'bn-hard-09', language: 'bn', difficulty: 'hard', category: 'জনস্বাস্থ্য', prompt: 'ঘোষিত বৈশ্বিক স্বাস্থ্য জরুরি অবস্থায় ওষুধের পেটেন্ট সুরক্ষা স্থগিত করা উচিত।' },
+  { id: 'bn-hard-10', language: 'bn', difficulty: 'hard', category: 'করনীতি', prompt: 'অর্জিত আয়ের ওপর করের চেয়ে উত্তরাধিকারসূত্রে পাওয়া সম্পদের ওপর কর বেশি ন্যায়সঙ্গত।' },
+  { id: 'bn-hard-11', language: 'bn', difficulty: 'hard', category: 'শাসনব্যবস্থা', prompt: 'জটিল সংকটে নির্বাচিত রাজনীতিবিদদের চেয়ে স্বাধীন বিশেষজ্ঞ সংস্থার বেশি নীতিনির্ধারণী ক্ষমতা থাকা উচিত।' },
+  { id: 'bn-hard-12', language: 'bn', difficulty: 'hard', category: 'গোপনীয়তা', prompt: 'জাতীয় নিরাপত্তার নজরদারির প্রয়োজনের চেয়ে ডিজিটাল গোপনীয়তার অধিকার বেশি গুরুত্বপূর্ণ।' },
+];
+
+export function randomTopic(difficulty: Difficulty, excludeId?: string, language: SpeechLanguage = 'en'): Topic {
+  const topics = language === 'bn' ? BENGALI_TOPICS : TOPICS;
+  const pool = topics.filter((topic) => topic.difficulty === difficulty && topic.id !== excludeId);
+  return pool[Math.floor(Math.random() * pool.length)] ?? topics[0];
 }

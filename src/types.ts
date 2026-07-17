@@ -4,6 +4,7 @@ export type StanceMode = 'choose' | 'game';
 export type PracticeMode = 'solo' | 'duel';
 export type AiProvider = 'browser' | 'ollama';
 export type StorageMode = 'auto' | 'browser' | 'database';
+export type SpeechLanguage = 'en' | 'bn';
 
 export interface Topic {
   id: string;
@@ -11,6 +12,7 @@ export interface Topic {
   difficulty: Difficulty;
   category: string;
   context?: string;
+  language?: SpeechLanguage;
 }
 
 export interface User {
@@ -45,6 +47,7 @@ export interface AudioMetrics {
 }
 
 export interface TextMetrics {
+  language?: SpeechLanguage;
   wordCount: number;
   wordsPerMinute: number;
   uniqueWordRatio: number;
@@ -90,6 +93,7 @@ export interface CoachFeedback {
   topicStrategy?: TopicStrategy;
   provider: AiProvider;
   model?: string;
+  language?: SpeechLanguage;
 }
 
 export interface CoachingWeakness {
@@ -170,6 +174,7 @@ export interface UserSettings {
   ollamaViaServer: boolean;
   whisperModel: string;
   whisperDevice: 'auto' | 'webgpu' | 'wasm';
+  speechLanguage: SpeechLanguage;
   stanceAnalysis: 'signals' | 'semantic';
   saveRecordings: boolean;
 }
@@ -188,7 +193,7 @@ export interface AppConfig {
   speech: {
     model: string;
     device: 'auto' | 'webgpu' | 'wasm';
-    language: string;
+    language: SpeechLanguage;
   };
   practice: {
     defaultDurationSeconds: number;

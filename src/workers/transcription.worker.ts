@@ -1,4 +1,6 @@
 import { env, pipeline } from '@huggingface/transformers';
+import { isSpeechLanguage, whisperLanguageName } from '../lib/speechLanguages';
+import type { SpeechLanguage } from '../types';
 
 env.allowLocalModels = false;
 env.useBrowserCache = true;
@@ -11,7 +13,7 @@ interface TranscribeMessage {
   audio: Float32Array;
   model: string;
   device: DeviceChoice;
-  language: string;
+  language: SpeechLanguage;
   hasSignal: boolean;
 }
 
@@ -55,6 +57,9 @@ async function loadForDevice(
   post(message.id, { type: 'status', stage: 'model', message: `Loading local speech model (${device.toUpperCase()})…`, progress: 0 });
   const loaded = await pipeline('automatic-speech-recognition', message.model, {
     device,
+    dtype: device === 'webgpu'
+      ? { encoder_model: 'fp32', decoder_model_merged: 'q4' }
+      : 'q8',
     progress_callback: (progress: { status?: string; progress?: number; file?: string }) => {
       post(message.id, {
         type: 'status',
@@ -103,9 +108,7 @@ function transcriptionOptions(message: TranscribeMessage): Record<string, unknow
     options.stride_length_s = 4;
   }
   if (/whisper/i.test(message.model) && !isEnglishOnlyWhisper(message.model)) {
-    if (message.language && message.language !== 'auto') {
-      options.language = message.language === 'en' ? 'english' : message.language;
-    }
+    options.language = whisperLanguageName(message.language);
     options.task = 'transcribe';
   }
   return options;
@@ -139,6 +142,10 @@ self.onmessage = async (event: MessageEvent<TranscribeMessage>) => {
   const message = event.data;
   if (message.type !== 'transcribe') return;
   try {
+    if (!isSpeechLanguage(message.language)) throw new Error('The selected practice language is not supported.');
+    if (message.language !== 'en' && isEnglishOnlyWhisper(message.model)) {
+      throw new Error('This Whisper model only understands English. Choose a multilingual model for Bengali.');
+    }
     const speechPipeline = await loadTranscriber(message);
     post(message.id, { type: 'status', stage: 'transcription', message: 'Turning speech into text locally…' });
     const output = await transcribeWithDeviceFallback(message, speechPipeline);

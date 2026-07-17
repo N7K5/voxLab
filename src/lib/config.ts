@@ -1,4 +1,5 @@
 import type { AppConfig, UserSettings } from '../types';
+import { isSpeechLanguage, modelForSpeechLanguage } from './speechLanguages';
 
 const fallbackConfig: AppConfig = {
   storage: { mode: 'browser', apiBaseUrl: '/api' },
@@ -30,10 +31,11 @@ export async function loadAppConfig(): Promise<AppConfig> {
     const response = await fetch(`${import.meta.env.BASE_URL}app.config.json`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Config returned ${response.status}`);
     const incoming = (await response.json()) as Partial<AppConfig>;
+    const speech = { ...fallbackConfig.speech, ...incoming.speech };
     cachedConfig = deploymentConfig({
       storage: { ...fallbackConfig.storage, ...incoming.storage },
       ai: { ...fallbackConfig.ai, ...incoming.ai },
-      speech: { ...fallbackConfig.speech, ...incoming.speech },
+      speech: { ...speech, language: isSpeechLanguage(speech.language) ? speech.language : 'en' },
       practice: { ...fallbackConfig.practice, ...incoming.practice },
     });
   } catch {
@@ -48,9 +50,10 @@ export function settingsFromConfig(config: AppConfig): UserSettings {
     ollamaEndpoint: config.ai.ollamaEndpoint,
     ollamaModel: config.ai.ollamaModel,
     ollamaViaServer: config.ai.ollamaViaServer,
-    whisperModel: config.speech.model,
+    whisperModel: modelForSpeechLanguage(config.speech.model, config.speech.language),
     whisperDevice: config.speech.device,
-    stanceAnalysis: 'semantic',
+    speechLanguage: config.speech.language,
+    stanceAnalysis: config.speech.language === 'bn' ? 'signals' : 'semantic',
     saveRecordings: config.practice.saveRecordings,
   };
 }

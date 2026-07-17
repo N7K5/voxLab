@@ -104,7 +104,7 @@ export function transcribeLocally(
   options: {
     model: string;
     device: 'auto' | 'webgpu' | 'wasm';
-    language?: string;
+    language?: SpeechLanguage;
     onProgress?: (progress: TranscriptionProgress) => void;
   },
 ): Promise<TranscriptionResult> {
@@ -123,3 +123,4 @@ export function transcribeLocally(
     }, [transferable.buffer]);
   });
 }
+import type { SpeechLanguage } from '../types';

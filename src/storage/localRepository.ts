@@ -1,4 +1,5 @@
 import type { PracticeAttempt, User, UserSettings } from '../types';
+import { modelForSpeechLanguage } from '../lib/speechLanguages';
 import type { AppRepository } from './repository';
 
 const DB_NAME = 'voxlab';
@@ -99,6 +100,7 @@ function validateLocalUser(value: unknown): value is LocalUser {
 function validatedSettings(settings: UserSettings): UserSettings {
   if (settings.aiProvider !== 'browser' && settings.aiProvider !== 'ollama') throw new Error('Invalid AI provider.');
   if (!['auto', 'webgpu', 'wasm'].includes(settings.whisperDevice)) throw new Error('Invalid speech-model device.');
+  if (!['en', 'bn'].includes(settings.speechLanguage)) throw new Error('Invalid practice language.');
   if (!['signals', 'semantic'].includes(settings.stanceAnalysis)) throw new Error('Invalid stance-analysis mode.');
   if (typeof settings.ollamaViaServer !== 'boolean' || typeof settings.saveRecordings !== 'boolean') {
     throw new Error('Settings contain invalid boolean values.');
@@ -118,13 +120,16 @@ function validatedSettings(settings: UserSettings): UserSettings {
     ollamaViaServer: settings.ollamaViaServer,
     whisperModel: settings.whisperModel,
     whisperDevice: settings.whisperDevice,
-    stanceAnalysis: settings.stanceAnalysis,
+    speechLanguage: settings.speechLanguage,
+    stanceAnalysis: settings.speechLanguage === 'bn' ? 'signals' : settings.stanceAnalysis,
     saveRecordings: settings.saveRecordings,
   };
 }
 
 function settingsWithDefaults(defaults: UserSettings, stored?: Partial<UserSettings>): UserSettings {
   const candidate = { ...defaults, ...(stored ?? {}) };
+  candidate.whisperModel = modelForSpeechLanguage(candidate.whisperModel, candidate.speechLanguage);
+  if (candidate.speechLanguage === 'bn') candidate.stanceAnalysis = 'signals';
   try {
     return validatedSettings(candidate);
   } catch {

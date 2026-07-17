@@ -76,8 +76,14 @@ function buildPrompt(input: {
   text: TextMetrics;
   scores: ScoreBreakdown;
 }): string {
+  const languageInstruction = input.topic.language === 'bn'
+    ? 'Write every natural-language JSON value in Bengali. Keep each "original" quotation copied exactly from the Bengali transcript; do not translate that quotation.'
+    : 'Write every natural-language JSON value in English.';
   return `You are a rigorous but encouraging public-speaking coach.
 The speaker had to argue ${input.stance.toUpperCase()} this motion: "${input.topic.prompt}"
+
+Output language:
+${languageInstruction}
 
 Transcript:
 ${input.transcript.slice(0, 12_000)}
@@ -95,20 +101,29 @@ function stringField(value: unknown, message: string): string {
   return value.trim();
 }
 
-function parseContent(content: string, model: string, transcript: string): CoachFeedback {
+function containsBengali(value: string): boolean {
+  return (value.match(/[\u0980-\u09ff]/gu)?.length ?? 0) >= 3;
+}
+
+function parseContent(content: string, model: string, transcript: string, language: Topic['language']): CoachFeedback {
   const cleaned = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   const parsed = JSON.parse(cleaned) as Partial<CoachFeedback>;
   if (typeof parsed.summary !== 'string' || !Array.isArray(parsed.strengths) || !Array.isArray(parsed.improvements)) {
     throw new Error('Ollama returned an unexpected coaching format.');
   }
+  const summary = stringField(parsed.summary, 'Ollama returned an empty summary.');
   const improvements = parsed.improvements.slice(0, 3).map((item) => {
     if (!item || typeof item.title !== 'string' || typeof item.detail !== 'string' || typeof item.drill !== 'string') {
       throw new Error('Ollama returned an incomplete improvement.');
     }
-    return { title: item.title, detail: item.detail, drill: item.drill };
+    return {
+      title: stringField(item.title, 'Ollama returned an incomplete improvement.'),
+      detail: stringField(item.detail, 'Ollama returned an incomplete improvement.'),
+      drill: stringField(item.drill, 'Ollama returned an incomplete improvement.'),
+    };
   });
   if (improvements.length !== 3) throw new Error('Ollama did not return three improvements.');
-  const strengths = parsed.strengths.filter((value): value is string => typeof value === 'string').slice(0, 3);
+  const strengths = parsed.strengths.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())).slice(0, 3).map((value) => value.trim());
   if (strengths.length < 2) throw new Error('Ollama did not return two usable strengths.');
   if (!Array.isArray(parsed.weaknesses) || parsed.weaknesses.length !== 3) {
     throw new Error('Ollama did not return three usable weaknesses.');
@@ -139,20 +154,38 @@ function parseContent(content: string, model: string, transcript: string): Coach
   if (!strategy || !Array.isArray(strategy.angles) || strategy.angles.length < 3 || !Array.isArray(strategy.nextOutline) || strategy.nextOutline.length < 4) {
     throw new Error('Ollama returned an incomplete topic strategy.');
   }
+  const topicStrategy = {
+    coreQuestion: stringField(strategy.coreQuestion, 'Ollama returned an incomplete topic strategy.'),
+    angles: strategy.angles.slice(0, 3).map((value) => stringField(value, 'Ollama returned an incomplete topic strategy.')),
+    strongestCounterargument: stringField(strategy.strongestCounterargument, 'Ollama returned an incomplete topic strategy.'),
+    nextOutline: strategy.nextOutline.slice(0, 4).map((value) => stringField(value, 'Ollama returned an incomplete topic strategy.')),
+  };
+  if (language === 'bn') {
+    const generatedFields = [
+      summary,
+      ...strengths,
+      ...improvements.flatMap((item) => [item.title, item.detail, item.drill]),
+      ...weaknesses.flatMap((item) => [item.title, item.evidence, item.whyItMatters, item.howToImprove]),
+      ...reframes.flatMap((item) => [item.issue, item.revised, item.principle]),
+      topicStrategy.coreQuestion,
+      ...topicStrategy.angles,
+      topicStrategy.strongestCounterargument,
+      ...topicStrategy.nextOutline,
+    ];
+    if (generatedFields.some((field) => !containsBengali(field))) {
+      throw new Error('Ollama did not return the requested Bengali coaching, so browser coaching was used.');
+    }
+  }
   return {
-    summary: parsed.summary,
+    summary,
     strengths,
     improvements,
     weaknesses,
     reframes,
-    topicStrategy: {
-      coreQuestion: stringField(strategy.coreQuestion, 'Ollama returned an incomplete topic strategy.'),
-      angles: strategy.angles.slice(0, 3).map((value) => stringField(value, 'Ollama returned an incomplete topic strategy.')),
-      strongestCounterargument: stringField(strategy.strongestCounterargument, 'Ollama returned an incomplete topic strategy.'),
-      nextOutline: strategy.nextOutline.slice(0, 4).map((value) => stringField(value, 'Ollama returned an incomplete topic strategy.')),
-    },
+    topicStrategy,
     provider: 'ollama',
     model,
+    language: language ?? 'en',
   };
 }
 
@@ -200,5 +233,7 @@ export async function requestOllamaFeedback(
   const result = await response.json().catch(() => null) as { message?: { content?: string }; error?: string } | null;
   if (!response.ok) throw new Error(result?.error || `Ollama request failed (${response.status}).`);
   if (!result?.message?.content) throw new Error('Ollama returned no coaching text.');
-  return parseContent(result.message.content, settings.ollamaModel, input.transcript);
+  return parseContent(result.message.content, settings.ollamaModel, input.transcript, input.topic.language);
 }
+
+export const ollamaCoachTestHelpers = { parseContent };

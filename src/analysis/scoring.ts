@@ -37,10 +37,12 @@ function voiceEvidenceCeiling(voicedSeconds: number): number {
 export function calculateScores(audio: AudioMetrics, text: TextMetrics): ScoreBreakdown {
   const languageCeiling = languageEvidenceCeiling(text.wordCount);
   const voiceCeiling = voiceEvidenceCeiling(audio.voicedSeconds);
-  const paceDistance = text.wordsPerMinute < 120
-    ? 120 - text.wordsPerMinute
-    : Math.max(0, text.wordsPerMinute - 170);
-  const rawPacing = 92 - paceDistance * (text.wordsPerMinute < 120 ? 0.8 : 0.68);
+  const paceFloor = text.language === 'bn' ? 100 : 120;
+  const paceCeiling = text.language === 'bn' ? 160 : 170;
+  const paceDistance = text.wordsPerMinute < paceFloor
+    ? paceFloor - text.wordsPerMinute
+    : Math.max(0, text.wordsPerMinute - paceCeiling);
+  const rawPacing = 92 - paceDistance * (text.wordsPerMinute < paceFloor ? 0.8 : 0.68);
   const pacing = Math.min(voiceCeiling, clampScore(rawPacing));
   const speakingMinutes = Math.max(audio.speakingSpanSeconds / 60, 1 / 60);
   const pauseRate = audio.pauseCount / speakingMinutes;
@@ -161,7 +163,7 @@ function weaknessFor(
 function transcriptExcerpts(transcript: string): string[] {
   const normalized = transcript.replace(/\s+/g, ' ').trim();
   if (!normalized) return [];
-  const sentences = normalized.match(/[^.!?]+[.!?]?/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [];
+  const sentences = normalized.match(/[^.!?।]+[.!?।]?/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [];
   if (sentences.length >= 2) return sentences;
   const words = normalized.split(' ');
   if (words.length <= 24) return [normalized];
@@ -221,12 +223,139 @@ function buildTopicStrategy(topic: Topic, stance: Stance): TopicStrategy {
   };
 }
 
+const bengaliLabels: Record<keyof typeof labels, string> = {
+  pacing: 'বলার গতি',
+  fluency: 'সাবলীলতা',
+  vocabulary: 'শব্দচয়ন',
+  delivery: 'কণ্ঠের উপস্থাপনা',
+  structure: 'কাঠামো',
+  relevance: 'বিষয়ের প্রাসঙ্গিকতা',
+};
+
+function bengaliWeakness(
+  key: keyof typeof labels,
+  audio: AudioMetrics,
+  text: TextMetrics,
+): CoachingWeakness {
+  if (key === 'pacing') return {
+    title: 'বলার গতি নিয়ন্ত্রণ কমিয়েছে',
+    evidence: `পরিমাপ করা গতি ছিল মিনিটে ${Math.round(text.wordsPerMinute)}টি শব্দ; এই বাংলা অনুশীলনের প্রাথমিক লক্ষ্য প্রায় ১০০–১৬০ শব্দ।`,
+    whyItMatters: text.wordsPerMinute < 100
+      ? 'খুব ধীর গতি যুক্তির অংশগুলোর সংযোগ দুর্বল করে দিতে পারে।'
+      : 'খুব দ্রুত বললে শ্রোতা দাবি, কারণ ও উদাহরণ আলাদা করার সময় পান না।',
+    howToImprove: 'প্রতিটি মূল দাবির পরে একটি শ্বাসের চিহ্ন দিন। একই বক্তব্য আবার বলুন এবং সেই বিরতিগুলো বজায় রাখুন।',
+  };
+  if (key === 'fluency') return {
+    title: 'দ্বিধা বক্তব্যের প্রবাহ ভেঙেছে',
+    evidence: `এই বক্তব্যে ${text.fillerCount}টি ভরাট শব্দ, ${audio.pauseCount}টি বিরতি এবং ${audio.longPauseCount}টি দীর্ঘ বিরতি ধরা পড়েছে।`,
+    whyItMatters: 'ঘন ঘন ভরাট শব্দ বা অপরিকল্পিত বিরতিতে মূল যুক্তি অনুসরণ করা কঠিন হয়।',
+    howToImprove: '৩০ সেকেন্ড আবার বলুন। ভরাট শব্দ আসার আগে সেটির বদলে এক মুহূর্ত নীরব থাকুন।',
+  };
+  if (key === 'vocabulary') return {
+    title: 'শব্দচয়ন আরও নির্দিষ্ট হতে পারে',
+    evidence: `শব্দের বৈচিত্র্য ছিল ${Math.round(text.uniqueWordRatio * 100)}%, তথ্যবহুল শব্দের অনুপাত ${Math.round(text.contentWordRatio * 100)}%, এবং ${text.repeatedPhraseCount}টি বাক্যাংশ পুনরাবৃত্ত হয়েছে।`,
+    whyItMatters: 'নির্দিষ্ট বিশেষ্য ও সক্রিয় ক্রিয়া অবস্থানটিকে স্পষ্ট এবং মনে রাখার মতো করে।',
+    howToImprove: 'ট্রান্সক্রিপ্ট থেকে তিনটি অস্পষ্ট বা পুনরাবৃত্ত শব্দ খুঁজে প্রতিটির বদলে নির্দিষ্ট ব্যক্তি, কাজ বা ফলাফল লিখুন।',
+  };
+  if (key === 'delivery') return {
+    title: 'কণ্ঠের জোর মূল কথাকে যথেষ্ট আলাদা করেনি',
+    evidence: `গড় শব্দমাত্রা ছিল ${audio.averageVolumeDb.toFixed(1)} dBFS, শব্দমাত্রার পরিবর্তন ${audio.volumeVariation.toFixed(1)} dB, এবং স্বরের পরিবর্তন ${audio.pitchVariationSemitones?.toFixed(1) ?? 'নির্ভরযোগ্যভাবে মাপা যায়নি'} সেমিটোন।`,
+    whyItMatters: 'সব বাক্য একই ভঙ্গিতে বললে দাবি, বৈপরীত্য ও উপসংহার কোথায় তা বোঝার সংকেত কমে যায়।',
+    howToImprove: 'প্রতিটি অংশে একটি গুরুত্বপূর্ণ শব্দ দাগ দিন। শুধু সেই শব্দে স্বর বা জোর বদলান।',
+  };
+  if (key === 'structure') return {
+    title: 'যুক্তির পথ আরও স্পষ্ট হওয়া দরকার',
+    evidence: `সূচনা: ${text.hasOpening ? 'ধরা পড়েছে' : 'ধরা পড়েনি'}; উপসংহার: ${text.hasConclusion ? 'ধরা পড়েছে' : 'ধরা পড়েনি'}; কারণের সংযোগ: ${text.reasoningMarkerCount}; উদাহরণের সংকেত: ${text.exampleMarkerCount}।`,
+    whyItMatters: 'শ্রোতার বোঝা উচিত দাবি কোথায় শেষ হচ্ছে, কেন সেটি সত্য এবং কোন উদাহরণ সেটি প্রমাণ করে।',
+    howToImprove: 'রেকর্ড করার আগে চারটি ছোট লাইন লিখুন: বক্তব্য, কারণ, উদাহরণ, আবার বক্তব্য। একবারে একটি লাইন বলুন।',
+  };
+  return {
+    title: 'দাবিগুলোকে বিষয়ের সঙ্গে আরও শক্তভাবে যুক্ত করা দরকার',
+    evidence: `বিষয়ের মূল শব্দের ব্যবহার ছিল ${Math.round(text.topicKeywordCoverage * 100)}%, এবং অবস্থানের সংকেত ছিল ${text.stanceSignal}।`,
+    whyItMatters: 'একটি ভালো কথা তখনই যুক্তিকে এগিয়ে নেয়, যখন তার ফলাফল এই বিষয় ও নির্ধারিত পক্ষের সঙ্গে স্পষ্টভাবে যুক্ত হয়।',
+    howToImprove: 'প্রতিটি কারণের পরে বলুন, “এটি এই প্রস্তাবের জন্য গুরুত্বপূর্ণ, কারণ…” তারপর নির্দিষ্ট ফলাফলটি বলুন।',
+  };
+}
+
+function buildBengaliReframes(transcript: string, stance: Stance): SentenceReframe[] {
+  const fillerPattern = /(?:^|\s)(?:মানে|আসলে|উম+|আচ্ছা)(?:[,，]\s*|\s+)/gu;
+  return transcriptExcerpts(transcript).slice(0, 2).map((original) => {
+    const cleaned = original.replace(fillerPattern, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (cleaned && cleaned !== original) return {
+      original,
+      issue: 'ভরাট শব্দটি মূল দাবিতে পৌঁছাতে দেরি করিয়েছে।',
+      revised: cleaned,
+      principle: 'সরাসরি দাবি দিয়ে শুরু করুন; প্রয়োজন না হলে দ্বিধার ভাষা বাদ দিন।',
+    };
+    return {
+      original,
+      issue: 'কথাটির ফলাফল বিষয়ের সঙ্গে আরও সরাসরি যুক্ত করা যায়।',
+      revised: `${original.replace(/[.!?।]+$/, '')}। এটি প্রস্তাবটির ${stance === 'for' ? 'পক্ষে' : 'বিপক্ষে'}, কারণ [নির্দিষ্ট ফলাফলটি বলুন]।`,
+      principle: 'প্রাসঙ্গিকতা শ্রোতাকে অনুমান করতে দেবেন না; ফলাফলটি স্পষ্টভাবে বলুন।',
+    };
+  });
+}
+
+function buildBengaliTopicStrategy(topic: Topic, stance: Stance): TopicStrategy {
+  return {
+    coreQuestion: `“${topic.prompt}” প্রস্তাবটি ${stance === 'for' ? 'গ্রহণ' : 'প্রত্যাখ্যান'} করলে বাস্তবে কী বদলাবে?`,
+    angles: [
+      'মানুষ: কারা উপকৃত হবে, কারা খরচ বহন করবে এবং প্রভাব কতটা বড়?',
+      `কার্যপদ্ধতি: কোন ধাপে ধাপে প্রক্রিয়ায় আপনার ${stance === 'for' ? 'পক্ষের' : 'বিপক্ষের'} অবস্থান সেই ফল তৈরি করবে?`,
+      'বিনিময়: আপনার সুবিধাটি কেন সবচেয়ে বড় অসুবিধার চেয়ে বেশি গুরুত্বপূর্ণ, সম্ভাব্য বা দীর্ঘস্থায়ী?',
+    ],
+    strongestCounterargument: 'শক্তিশালী প্রতিপক্ষ আপনার কারণ ও ফলাফলের সংযোগ নিয়ে প্রশ্ন করবে এবং বলবে যে ক্ষতি সুবিধার চেয়ে বেশি। উত্তর দেওয়ার আগে সেই আপত্তিটি ন্যায্যভাবে তুলে ধরুন।',
+    nextOutline: [
+      `অবস্থান — “আমি এই প্রস্তাবের ${stance === 'for' ? 'পক্ষে' : 'বিপক্ষে'}, কারণ…”`,
+      'কারণ — অনেক সুবিধার তালিকা নয়, একটি স্পষ্ট কার্যপদ্ধতি বলুন।',
+      'উদাহরণ — একজন ব্যক্তি, একটি কাজ এবং একটি ফলাফল দেখান।',
+      'খণ্ডন ও সমাপ্তি — সবচেয়ে শক্তিশালী আপত্তির উত্তর দিয়ে আবার প্রস্তাবে ফিরুন।',
+    ],
+  };
+}
+
+function browserFeedbackBengali(
+  scores: ScoreBreakdown,
+  audio: AudioMetrics,
+  text: TextMetrics,
+  context: { transcript: string; topic: Topic; stance: Stance },
+): CoachFeedback {
+  const categories = (Object.keys(bengaliLabels) as Array<keyof typeof bengaliLabels>)
+    .map((key) => ({ key, score: scores[key], label: bengaliLabels[key] }))
+    .sort((left, right) => right.score - left.score);
+  const strengths = categories.slice(0, 2).map(({ label, score }) => `${label} তুলনামূলকভাবে শক্তিশালী ছিল (${score}/100)।`);
+  const weaknesses = categories.slice(-3).reverse().map(({ key }) => bengaliWeakness(key, audio, text));
+  const improvements = weaknesses.map((weakness) => ({
+    title: weakness.title,
+    detail: `${weakness.evidence} ${weakness.whyItMatters}`,
+    drill: weakness.howToImprove,
+  }));
+  const summary = text.stanceSignal === 'opposed'
+    ? 'উপস্থাপনায় ব্যবহারযোগ্য প্রমাণ ছিল, কিন্তু ট্রান্সক্রিপ্টটি নির্ধারিত পক্ষের বিপরীতে যুক্তি দিচ্ছে বলে মনে হয়েছে। তাই স্কোর সীমিত হয়েছে; সময়বদ্ধ বক্তব্যে ভাষার সৌন্দর্যের আগে সঠিক পক্ষ বজায় রাখা জরুরি।'
+    : scores.overall >= 80
+      ? 'এটি একটি শক্তিশালী প্রচেষ্টা। পরবর্তী উন্নতির জন্য একবারে সবচেয়ে দুর্বল একটি অভ্যাস নিয়ে কাজ করুন।'
+      : scores.overall >= 65
+        ? 'ভালো ভিত্তি তৈরি হয়েছে, তবে আরও শক্তিশালী স্তরে যেতে কয়েকটি নির্দিষ্ট ঘাটতি ঠিক করা দরকার।'
+        : 'মূল ধারণা আছে, কিন্তু প্রমাণ এখনো ধারাবাহিক নয়। জটিলতা বাড়ানোর আগে একটি পরিষ্কার কাঠামো ও স্থির গতি গড়ে তুলুন।';
+  return {
+    summary,
+    strengths,
+    improvements,
+    weaknesses,
+    reframes: buildBengaliReframes(context.transcript, context.stance),
+    topicStrategy: buildBengaliTopicStrategy(context.topic, context.stance),
+    provider: 'browser',
+    language: 'bn',
+  };
+}
+
 export function browserFeedback(
   scores: ScoreBreakdown,
   audio: AudioMetrics,
   text: TextMetrics,
   context?: { transcript: string; topic: Topic; stance: Stance },
 ): CoachFeedback {
+  if (context?.topic.language === 'bn') return browserFeedbackBengali(scores, audio, text, context);
   const categories = (Object.keys(labels) as Array<keyof typeof labels>)
     .map((key) => ({ key, score: scores[key], label: labels[key] }))
     .sort((a, b) => b.score - a.score);
@@ -272,5 +401,6 @@ export function browserFeedback(
     reframes: context ? buildReframes(context.transcript, context.stance) : [],
     topicStrategy: context ? buildTopicStrategy(context.topic, context.stance) : undefined,
     provider: 'browser',
+    language: 'en',
   };
 }

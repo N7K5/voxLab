@@ -5,6 +5,7 @@ import {
   Cpu,
   Database,
   HardDrive,
+  Languages,
   LoaderCircle,
   Save,
   Settings2,
@@ -16,13 +17,31 @@ import { useNavigate } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { StorageBadge } from '../components/StorageBadge';
 import { useApp } from '../context/AppContext';
-import type { AiProvider, UserSettings } from '../types';
+import { modelForSpeechLanguage } from '../lib/speechLanguages';
+import type { AiProvider, SpeechLanguage, UserSettings } from '../types';
 
 const speechModelDetails: Record<string, { tier: string; detail: string; heavy?: boolean }> = {
   'onnx-community/whisper-tiny.en': { tier: 'Fast', detail: 'Smallest download; best for quick practice on most devices.' },
   'onnx-community/whisper-base.en': { tier: 'Balanced', detail: 'Better recognition with a moderate first-time download.' },
   'distil-whisper/distil-small.en': { tier: 'Accurate', detail: 'A larger distilled English model; WebGPU recommended.', heavy: true },
-  'onnx-community/whisper-small.en': { tier: 'Maximum', detail: 'Highest browser tier; can approach 1 GB on WebGPU and needs a powerful desktop.', heavy: true },
+  'onnx-community/whisper-small.en': { tier: 'Maximum', detail: 'Highest browser tier; roughly 600 MB of model weights on WebGPU plus substantial runtime memory.', heavy: true },
+  'onnx-community/whisper-tiny': { tier: 'Fast multilingual', detail: 'Smallest Bengali-capable model; quickest, but less accurate with accents and noisy rooms.' },
+  'onnx-community/whisper-base': { tier: 'Balanced multilingual', detail: 'A moderate Bengali-capable model for everyday devices.' },
+  'onnx-community/whisper-small': { tier: 'Accurate multilingual', detail: 'Best Bengali browser tier; roughly 250 MB with quantized browser CPU weights.', heavy: true },
+};
+
+const speechModels: Record<SpeechLanguage, Array<{ value: string; label: string }>> = {
+  en: [
+    { value: 'onnx-community/whisper-tiny.en', label: 'Fast · Whisper Tiny English' },
+    { value: 'onnx-community/whisper-base.en', label: 'Balanced · Whisper Base English' },
+    { value: 'distil-whisper/distil-small.en', label: 'Accurate · Distil Whisper Small English' },
+    { value: 'onnx-community/whisper-small.en', label: 'Maximum · Whisper Small English' },
+  ],
+  bn: [
+    { value: 'onnx-community/whisper-tiny', label: 'Fast · Whisper Tiny Multilingual' },
+    { value: 'onnx-community/whisper-base', label: 'Balanced · Whisper Base Multilingual' },
+    { value: 'onnx-community/whisper-small', label: 'Accurate · Whisper Small Multilingual' },
+  ],
 };
 
 export function SettingsPage() {
@@ -68,6 +87,15 @@ export function SettingsPage() {
       ...current,
       aiProvider: provider,
       ollamaViaServer: provider === 'ollama' && storageStatus?.kind === 'browser' ? false : current.ollamaViaServer,
+    } : current);
+    setSaved(false);
+  };
+  const chooseSpeechLanguage = (speechLanguage: SpeechLanguage) => {
+    setDraft((current) => current ? {
+      ...current,
+      speechLanguage,
+      whisperModel: modelForSpeechLanguage(current.whisperModel, speechLanguage),
+      stanceAnalysis: speechLanguage === 'bn' ? 'signals' : current.stanceAnalysis,
     } : current);
     setSaved(false);
   };
@@ -118,6 +146,7 @@ export function SettingsPage() {
                   <span><strong>Route through app server</strong><small>Recommended; avoids browser CORS restrictions.</small></span>
                   <input className="toggle-input" type="checkbox" checked={storageStatus?.kind === 'browser' ? false : draft.ollamaViaServer} disabled={storageStatus?.kind === 'browser'} onChange={(event) => update('ollamaViaServer', event.target.checked)} />
                 </label>
+                <p className="settings-note">Ollama receives the topic, assigned side, transcript, measured analytics, and score to write feedback. VoxLab does not send the voice recording to Ollama.</p>
                 {storageStatus?.kind === 'browser' ? (
                   <p className="settings-note warning">Browser storage has no authenticated app-server proxy, so Ollama connects directly. Allow this site’s origin in Ollama (for example with <code>OLLAMA_ORIGINS</code>).</p>
                 ) : !draft.ollamaViaServer ? (
@@ -128,17 +157,18 @@ export function SettingsPage() {
           </section>
 
           <section className="settings-card">
-            <div className="settings-card-heading"><span className="settings-icon"><Cpu size={19} /></span><div><h2>Speech transcription</h2><p>The first run downloads the selected Whisper model and caches it in your browser.</p></div></div>
+            <div className="settings-card-heading"><span className="settings-icon"><Languages size={19} /></span><div><h2>Practice language and transcription</h2><p>Choose the language you will speak. The first run downloads a matching Whisper model and caches it in your browser.</p></div></div>
             <div className="settings-fields two-column">
-              <label><span>Whisper model</span><select value={draft.whisperModel} onChange={(event) => update('whisperModel', event.target.value)}><option value="onnx-community/whisper-tiny.en">Fast · Whisper Tiny English</option><option value="onnx-community/whisper-base.en">Balanced · Whisper Base English</option><option value="distil-whisper/distil-small.en">Accurate · Distil Whisper Small English</option><option value="onnx-community/whisper-small.en">Maximum · Whisper Small English</option></select></label>
+              <label><span>Default practice language</span><select value={draft.speechLanguage} onChange={(event) => chooseSpeechLanguage(event.target.value as SpeechLanguage)}><option value="en">English</option><option value="bn">বাংলা · Bengali</option></select></label>
+              <label><span>Whisper model</span><select value={draft.whisperModel} onChange={(event) => update('whisperModel', event.target.value)}>{speechModels[draft.speechLanguage].map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}</select></label>
               <label><span>Compute device</span><select value={draft.whisperDevice} onChange={(event) => update('whisperDevice', event.target.value as UserSettings['whisperDevice'])}><option value="auto">Auto detect</option><option value="webgpu">WebGPU</option><option value="wasm">WASM / CPU</option></select></label>
             </div>
             {selectedSpeechModel && <div className={`speech-model-note${selectedSpeechModel.heavy ? ' heavy' : ''}`}><Cpu size={15} /><div><strong>{selectedSpeechModel.tier} local model</strong><span>{selectedSpeechModel.detail} Models download on first use and are cached when the browser allows it.</span></div></div>}
             <div className="stance-analysis-setting">
               <div><strong>Argument stance checker</strong><span>Checks whether the transcript actually supports the assigned side.</span></div>
-              <select value={draft.stanceAnalysis} onChange={(event) => update('stanceAnalysis', event.target.value as UserSettings['stanceAnalysis'])}><option value="semantic">Semantic local model · recommended</option><option value="signals">Fast phrase signals · no extra model</option></select>
+              <select value={draft.speechLanguage === 'bn' ? 'signals' : draft.stanceAnalysis} disabled={draft.speechLanguage === 'bn'} onChange={(event) => update('stanceAnalysis', event.target.value as UserSettings['stanceAnalysis'])}><option value="semantic">Semantic local model · recommended</option><option value="signals">Fast phrase signals · no extra model</option></select>
             </div>
-            <p className="settings-note">The semantic option uses an English NLI model in this browser (about 100 MB on first use). It is much better at opposite-side detection, but mixed rebuttals, sarcasm, and transcription mistakes can still confuse it.</p>
+            <p className="settings-note">{draft.speechLanguage === 'bn' ? 'Bengali currently uses local Bengali phrase and topic signals for stance. Explicitly saying পক্ষে or বিপক্ষে can improve alignment detection; the English semantic model is not run on Bengali.' : 'The semantic option uses an English NLI model in this browser (about 100 MB on first use). It is much better at opposite-side detection, but mixed rebuttals, sarcasm, and transcription mistakes can still confuse it.'}</p>
           </section>
 
           <section className="settings-card">
