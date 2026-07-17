@@ -120,6 +120,12 @@ function argueVerb(language: SpeechLanguage): string {
   return 'Argue';
 }
 
+function computeDeviceLabel(device: 'auto' | 'webgpu' | 'wasm'): string {
+  if (device === 'wasm') return 'WASM / CPU · GPU disabled';
+  if (device === 'webgpu') return 'WebGPU preferred · CPU fallback';
+  return 'Auto · safe desktop GPU, CPU on mobile';
+}
+
 export function PracticePage() {
   const { user, settings, config, attempts, saveAttempt, saveAttempts, storageStatus } = useApp();
   const navigate = useNavigate();
@@ -148,6 +154,7 @@ export function PracticePage() {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [redoConfirmOpen, setRedoConfirmOpen] = useState(false);
+  const [activeComputeDevice, setActiveComputeDevice] = useState<'webgpu' | 'wasm' | null>(null);
   const [activeSpeaker, setActiveSpeaker] = useState<1 | 2>(1);
   const [speaker1Name, setSpeaker1Name] = useState('Speaker 1');
   const [speaker2Name, setSpeaker2Name] = useState('Opponent');
@@ -384,6 +391,7 @@ export function PracticePage() {
     setLevels([]);
     setManualTranscript('');
     setManualReason('');
+    setActiveComputeDevice(null);
     setError(null);
     setStep('ready');
   };
@@ -395,6 +403,7 @@ export function PracticePage() {
     setManualTranscript('');
     setManualReason('');
     setProgress(null);
+    setActiveComputeDevice(null);
     setError(null);
   };
 
@@ -436,6 +445,7 @@ export function PracticePage() {
     const controller = new AbortController();
     analysisAbortRef.current = controller;
     setError(null);
+    setActiveComputeDevice(settings.whisperDevice === 'auto' ? null : settings.whisperDevice);
     setProgress({ stage: 'audio', message: 'Reading the shape of your voice…' });
     setStep('processing');
     try {
@@ -455,6 +465,7 @@ export function PracticePage() {
         signal: controller.signal,
         onProgress: (nextProgress) => {
           if (controller.signal.aborted || analysisAbortRef.current !== controller) return;
+          if (nextProgress.device) setActiveComputeDevice(nextProgress.device);
           setProgress((currentProgress) => currentProgress?.stage === nextProgress.stage ? currentProgress : nextProgress);
         },
       });
@@ -766,7 +777,7 @@ export function PracticePage() {
               {error && <div className="form-error" role="alert">{error}</div>}
               <button className="button primary large full" type="button" onClick={() => void analyze()}><Sparkles size={18} /> {practiceMode === 'duel' && activeSpeaker === 1 ? 'Analyze and seal turn' : practiceMode === 'duel' ? 'Analyze and compare' : 'Analyze this speech'}</button>
               <button className="button secondary full" type="button" onClick={() => setRedoConfirmOpen(true)}><RotateCcw size={17} /> Record again</button>
-              <p className="model-note">First-time analysis may download the selected {language === 'en' ? '' : 'multilingual '}Whisper model{settings.stanceAnalysis === 'semantic' ? ' and multilingual semantic stance model' : ''}. They are cached for later practices.</p>
+              <p className="model-note">Whisper compute: {computeDeviceLabel(settings.whisperDevice)}. First-time analysis may download the selected {language === 'en' ? '' : 'multilingual '}Whisper model{settings.stanceAnalysis === 'semantic' ? ' and multilingual semantic stance model' : ''}. They are cached for later practices.</p>
             </aside>
           </div>
         </div>
@@ -802,7 +813,7 @@ export function PracticePage() {
               return <span key={key} className={`${complete ? 'complete' : ''}${active ? ' active' : ''}`}>{complete ? <Check size={12} /> : <i />}{label}</span>;
             })}
           </div>
-          <div className="processing-note"><ShieldCheck size={15} /><span>Keep this tab open. Voice metrics are being computed on your device.</span></div>
+          <div className="processing-note"><ShieldCheck size={15} /><span>Whisper compute: <strong>{computeDeviceLabel(activeComputeDevice ?? settings.whisperDevice)}</strong>. Keep this tab open while analysis runs on your device.</span></div>
         </div>
       </div>
     );

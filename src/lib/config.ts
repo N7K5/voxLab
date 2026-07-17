@@ -32,10 +32,13 @@ export async function loadAppConfig(): Promise<AppConfig> {
     if (!response.ok) throw new Error(`Config returned ${response.status}`);
     const incoming = (await response.json()) as Partial<AppConfig>;
     const speech = { ...fallbackConfig.speech, ...incoming.speech };
+    const device = speech.device === 'webgpu' || speech.device === 'wasm' || speech.device === 'auto'
+      ? speech.device
+      : fallbackConfig.speech.device;
     cachedConfig = deploymentConfig({
       storage: { ...fallbackConfig.storage, ...incoming.storage },
       ai: { ...fallbackConfig.ai, ...incoming.ai },
-      speech: { ...speech, language: isSpeechLanguage(speech.language) ? speech.language : 'en' },
+      speech: { ...speech, device, language: isSpeechLanguage(speech.language) ? speech.language : 'en' },
       practice: { ...fallbackConfig.practice, ...incoming.practice },
     });
   } catch {

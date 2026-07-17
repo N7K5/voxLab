@@ -44,9 +44,9 @@ npm run dev
 
 Open `http://localhost:5173`. The API also starts on `http://localhost:8787`. With no database configuration, the app automatically uses IndexedDB in the current browser.
 
-The first analysis downloads the configured Whisper ONNX model. With the default automatic WebGPU setup, Whisper Tiny and its browser runtime can use well over 100 MB; the recommended semantic stance checker downloads a separate multilingual NLI model of roughly 360 MB. A first run can therefore approach 500 MB. Transformers.js keeps model files in the browser cache when storage is available, but private browsing, cleared site data, quota pressure, or switching model/device tiers can make the browser fetch them again. Microphone access requires `localhost` or HTTPS.
+The first analysis downloads the configured Whisper ONNX model. With the default automatic setup, VoxLab uses WASM/CPU on mobile and limited-memory devices. On desktop it first checks for a usable WebGPU adapter and otherwise uses WASM/CPU without loading a GPU pipeline. Whisper Tiny and its browser runtime can use well over 100 MB; the recommended semantic stance checker downloads a separate multilingual NLI model of roughly 360 MB. A first run can therefore approach 500 MB. Transformers.js keeps model files in the browser cache when storage is available, but private browsing, cleared site data, quota pressure, or switching model/device tiers can make the browser fetch them again. Microphone access requires `localhost` or HTTPS.
 
-For a lower-download setup, choose **Fast · Whisper Tiny**, **WASM / CPU**, and **Fast phrase signals** in Settings. This is slower and the stance check is less capable, but it avoids the separate semantic model and uses the smaller quantized Whisper weights. Model-loading progress can represent either a network fetch or a read from the browser's model cache; use the browser developer tools' transferred-size column when you need to distinguish them.
+For a lower-download setup, choose **Fast · Whisper Tiny**, **WASM / CPU · disable GPU**, and **Fast phrase signals** in Settings, then press **Save settings**. Explicit WASM never requests a GPU adapter. This is slower and the stance check is less capable, but it avoids the separate semantic model and uses the smaller quantized Whisper weights. Model-loading progress can represent either a network fetch or a read from the browser's model cache; use the browser developer tools' transferred-size column when you need to distinguish them.
 
 Custom motions receive a quick structural precheck followed by an AI suitability check for clarity, breadth, and reasonable arguments on both sides. An accepted motion is used for the current round and is stored with that attempt in history. The browser suitability screen uses the same multilingual local NLI model as semantic stance checking, so its first custom check may trigger that roughly 360 MB download. When Ollama coaching is selected, only the custom motion text is sent to the configured Ollama endpoint; if it is unavailable, VoxLab falls back to the browser model. This is a debate-suitability screen, not a factual accuracy guarantee.
 
@@ -199,7 +199,7 @@ If Ollama is unavailable, an attempt still completes with the deterministic brow
 The browser path is fully useful without Ollama:
 
 1. Raw microphone PCM and a compressed playback recording are captured locally.
-2. A small Whisper model runs locally via WebGPU when available, with WASM fallback.
+2. A small Whisper model runs locally. Auto mode uses WASM/CPU on mobile or limited-memory devices; on desktop it verifies that a GPU adapter is usable before loading WebGPU. Unavailable or failed GPU runtimes restart once in a clean WASM worker. Explicit WASM/CPU bypasses GPU detection entirely.
 3. Deterministic signal and language analysis computes the metrics. The recommended multilingual NLI model can compare English, Bengali, or Hindi transcripts with the assigned motion; fast language-specific phrase and topic signals remain available without the extra model.
 4. A local rules-based coach produces evidence-backed strengths, weaknesses, strategy, and drills. It only offers a sentence reframe when a safe mechanical edit is observable; Ollama mode handles semantic rewrites.
 5. Spoken coaching uses shorter conversational phrasing, sentence pauses, and adjustable speed/pitch. The browser/operating-system default is the reliable first choice; the menu then shows at most three language-matched alternatives and removes known novelty/effect voices. Users can explicitly reveal browser-provided network voices when they prefer their sound. A browser-reported local voice does not guarantee offline synthesis.
@@ -219,7 +219,7 @@ The Settings page exposes four English transcription tiers:
 - **Accurate:** Distil Whisper Small English; Auto/WASM recommended for its available quantized browser files
 - **Maximum:** Whisper Small English; large download and a powerful desktop recommended
 
-The two larger options improve transcription at a real compute and memory cost. The maximum tier uses roughly 600 MB of model weights on WebGPU and needs additional runtime memory. The semantic stance checker is separately switchable between the recommended multilingual local NLI model (roughly 360 MB on first use) and fast phrase signals.
+The two larger options improve transcription at a real compute and memory cost. The maximum tier uses roughly 600 MB of model weights on WebGPU and needs additional runtime memory. The semantic stance checker is separately switchable between the recommended multilingual local NLI model (roughly 360 MB on first use) and fast phrase signals. The semantic stance and custom-topic models run through WASM/CPU; the Whisper backend selector does not move those auxiliary models onto the GPU.
 
 For Bengali and Hindi, VoxLab switches to multilingual Whisper:
 

@@ -64,6 +64,15 @@ function stopWorker(error: Error): void {
   worker = null;
 }
 
+export function disposeStanceAnalyzer(): void {
+  if (pending.size) {
+    stopWorker(stanceAbortError());
+    return;
+  }
+  worker?.terminate();
+  worker = null;
+}
+
 function getWorker(): Worker {
   if (worker) return worker;
   worker = new Worker(new URL('../workers/stance.worker.ts', import.meta.url), { type: 'module' });

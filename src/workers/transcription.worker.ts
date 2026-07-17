@@ -1,5 +1,6 @@
 import { env, pipeline } from '@huggingface/transformers';
-import { shouldTryWebGpuAutomatically, transcriptionModelDtype } from '../lib/transcriptionModel';
+import { chooseTranscriptionDevice, isWebGpuAdapter, type WebGpuAdapterLike } from '../lib/transcriptionDevice';
+import { transcriptionModelDtype } from '../lib/transcriptionModel';
 import { isSpeechLanguage, whisperLanguageName } from '../lib/speechLanguages';
 import type { SpeechLanguage } from '../types';
 
@@ -14,6 +15,8 @@ interface TranscribeMessage {
   audio: Float32Array;
   model: string;
   device: DeviceChoice;
+  forceDevice?: Exclude<DeviceChoice, 'auto'>;
+  preferWasm?: boolean;
   language: SpeechLanguage;
   hasSignal: boolean;
 }
@@ -31,6 +34,14 @@ type SpeechPipeline = {
 let loadedKey = '';
 let transcriber: SpeechPipeline | null = null;
 let loadedDevice: Exclude<DeviceChoice, 'auto'> | '' = '';
+let loadedRequestDevice: DeviceChoice | '' = '';
+
+class RestartOnWasmError extends Error {
+  constructor(reason: unknown) {
+    super(reason instanceof Error ? reason.message : 'Browser GPU transcription failed.');
+    this.name = 'RestartOnWasmError';
+  }
+}
 
 function post(id: string, payload: Record<string, unknown>): void {
   self.postMessage({ id, ...payload });
@@ -45,6 +56,7 @@ async function disposeTranscriber(): Promise<void> {
   transcriber = null;
   loadedKey = '';
   loadedDevice = '';
+  loadedRequestDevice = '';
 }
 
 async function loadForDevice(
@@ -52,10 +64,13 @@ async function loadForDevice(
   device: Exclude<DeviceChoice, 'auto'>,
 ): Promise<SpeechPipeline> {
   const key = `${message.model}:${device}`;
-  if (transcriber && loadedKey === key) return transcriber;
+  if (transcriber && loadedKey === key) {
+    loadedRequestDevice = message.device;
+    return transcriber;
+  }
 
   await disposeTranscriber();
-  post(message.id, { type: 'status', stage: 'model', message: `Loading local speech model (${device.toUpperCase()})…`, progress: 0 });
+  post(message.id, { type: 'status', stage: 'model', device, message: `Loading local speech model (${device.toUpperCase()})…`, progress: 0 });
   const loaded = await pipeline('automatic-speech-recognition', message.model, {
     device,
     dtype: transcriptionModelDtype(message.model, device),
@@ -73,25 +88,66 @@ async function loadForDevice(
   transcriber = loaded as unknown as SpeechPipeline;
   loadedKey = key;
   loadedDevice = device;
+  loadedRequestDevice = message.device;
   return transcriber;
 }
 
+function requestWebGpuAdapter(): Promise<unknown | null> {
+  const webgpu = (env.backends.onnx as {
+    webgpu?: { adapter?: unknown; powerPreference?: 'low-power' | 'high-performance' };
+  }).webgpu;
+  const configured = webgpu?.adapter;
+  if (isWebGpuAdapter(configured)) return Promise.resolve(configured);
+  const gpu = (globalThis.navigator as unknown as {
+    gpu?: { requestAdapter: (options?: { powerPreference?: 'low-power' | 'high-performance' }) => Promise<unknown | null> };
+  }).gpu;
+  return gpu?.requestAdapter(webgpu?.powerPreference ? { powerPreference: webgpu.powerPreference } : undefined)
+    ?? Promise.resolve(null);
+}
+
+function reuseWebGpuAdapter(adapter: WebGpuAdapterLike): void {
+  const onnx = env.backends.onnx as {
+    webgpu?: { adapter?: WebGpuAdapterLike; powerPreference?: 'low-power' | 'high-performance' };
+  };
+  if (isWebGpuAdapter(onnx.webgpu?.adapter)) return;
+  onnx.webgpu ??= {};
+  onnx.webgpu.adapter = adapter;
+}
+
 async function loadTranscriber(message: TranscribeMessage): Promise<SpeechPipeline> {
-  const supportsWebGpu = 'gpu' in navigator;
-  if (message.device !== 'auto') return loadForDevice(message, message.device);
-  if (transcriber && loadedDevice && loadedKey === `${message.model}:${loadedDevice}`) return transcriber;
-  if (supportsWebGpu && shouldTryWebGpuAutomatically(message.model)) {
-    try {
-      return await loadForDevice(message, 'webgpu');
-    } catch {
-      post(message.id, {
-        type: 'status',
-        stage: 'model',
-        message: 'WebGPU could not load this model; falling back to browser CPU (WASM)…',
-      });
-    }
+  if (
+    transcriber
+    && loadedDevice
+    && loadedRequestDevice === message.device
+    && loadedKey === `${message.model}:${loadedDevice}`
+  ) {
+    return transcriber;
   }
-  return loadForDevice(message, 'wasm');
+
+  const forcedDevice = message.forceDevice ?? (message.device === 'auto' && message.preferWasm ? 'wasm' : undefined);
+  const choice = forcedDevice
+    ? { device: forcedDevice }
+    : await chooseTranscriptionDevice(message.device, message.model, requestWebGpuAdapter);
+  if (choice.device === 'wasm' && message.device !== 'wasm') {
+    post(message.id, {
+      type: 'status',
+      stage: 'model',
+      device: 'wasm',
+      message: message.forceDevice === 'wasm'
+        ? message.preferWasm
+          ? 'Auto selected browser CPU (WASM) for this mobile or limited-memory device…'
+          : 'Continuing in a clean browser CPU (WASM) worker…'
+        : 'Using browser CPU (WASM); no GPU model will be loaded…',
+    });
+  }
+
+  try {
+    if ('adapter' in choice && choice.adapter) reuseWebGpuAdapter(choice.adapter);
+    return await loadForDevice(message, choice.device);
+  } catch (error) {
+    if (choice.device === 'webgpu') throw new RestartOnWasmError(error);
+    throw error;
+  }
 }
 
 function isEnglishOnlyWhisper(model: string): boolean {
@@ -122,21 +178,15 @@ async function transcribeWithDeviceFallback(
   const options = transcriptionOptions(message);
   try {
     const output = await speechPipeline(message.audio, options);
-    if (output.text.trim() || message.device !== 'auto' || loadedDevice !== 'webgpu' || !message.hasSignal) {
+    if (output.text.trim() || loadedDevice !== 'webgpu' || !message.hasSignal) {
       return output;
     }
   } catch (error) {
-    if (message.device !== 'auto' || loadedDevice !== 'webgpu') throw error;
+    if (loadedDevice !== 'webgpu') throw error;
+    throw new RestartOnWasmError(error);
   }
 
-  post(message.id, {
-    type: 'status',
-    stage: 'model',
-    message: 'Browser GPU transcription was inconclusive; retrying on browser CPU…',
-  });
-  const fallbackPipeline = await loadForDevice(message, 'wasm');
-  post(message.id, { type: 'status', stage: 'transcription', message: 'Retrying local transcription…' });
-  return fallbackPipeline(message.audio, options);
+  throw new RestartOnWasmError('Browser GPU transcription returned no words for speech-level audio.');
 }
 
 self.onmessage = async (event: MessageEvent<TranscribeMessage>) => {
@@ -148,7 +198,7 @@ self.onmessage = async (event: MessageEvent<TranscribeMessage>) => {
       throw new Error('This Whisper model only understands English. Choose a multilingual model for the selected language.');
     }
     const speechPipeline = await loadTranscriber(message);
-    post(message.id, { type: 'status', stage: 'transcription', message: 'Turning speech into text locally…' });
+    post(message.id, { type: 'status', stage: 'transcription', device: loadedDevice, message: 'Turning speech into text locally…' });
     const output = await transcribeWithDeviceFallback(message, speechPipeline);
     post(message.id, {
       type: 'result',
@@ -157,6 +207,14 @@ self.onmessage = async (event: MessageEvent<TranscribeMessage>) => {
       device: loadedDevice,
     });
   } catch (error) {
+    if (error instanceof RestartOnWasmError) {
+      post(message.id, {
+        type: 'retry-wasm',
+        error: error.message,
+        message: 'Restarting the speech model on browser CPU (WASM)…',
+      });
+      return;
+    }
     post(message.id, {
       type: 'error',
       error: error instanceof Error ? error.message : 'Local transcription failed.',

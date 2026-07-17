@@ -3,9 +3,9 @@ import { resampleTo16Khz } from '../audio/recorder';
 import { analyzeAudio, calculateClippingRatio } from './audioAnalysis';
 import { requestOllamaFeedback } from './ollamaCoach';
 import { browserFeedback, calculateScores } from './scoring';
-import { analyzeStanceSemantically, mergeStanceAssessment } from './stanceAnalysis';
+import { analyzeStanceSemantically, disposeStanceAnalyzer, mergeStanceAssessment } from './stanceAnalysis';
 import { analyzeText } from './textAnalysis';
-import { transcribeLocally, type TranscriptionProgress } from './transcribe';
+import { disposeTranscriptionWorker, preferWasmForCurrentDevice, transcribeLocally, type TranscriptionProgress } from './transcribe';
 import { modelForSpeechLanguage } from '../lib/speechLanguages';
 import { automaticTranscriptIssue } from './transcriptQuality';
 
@@ -20,6 +20,7 @@ export interface AnalysisProgress {
   stage: 'audio' | 'model' | 'transcription' | 'language' | 'coaching' | 'saving';
   message: string;
   progress?: number;
+  device?: 'webgpu' | 'wasm';
 }
 
 function analysisAbortError(): DOMException {
@@ -48,6 +49,7 @@ export async function runAnalysis(input: {
   throwIfAnalysisAborted(input.signal);
   const pcm16 = resampleTo16Khz(input.pcm, input.sampleRate);
   const speechLanguage = input.topic.language ?? input.settings.speechLanguage ?? 'en';
+  const constrainedBrowserDevice = preferWasmForCurrentDevice();
   input.onProgress?.({ stage: 'audio', message: 'Measuring pace, pauses, energy, and pitch…' });
   const originalClippingRatio = calculateClippingRatio(input.pcm);
   const audioPromise = analyzeAudio(pcm16).then((audio) => ({ ...audio, clippingRatio: originalClippingRatio }));
@@ -104,6 +106,7 @@ export async function runAnalysis(input: {
   let text = analyzeText(transcript, input.topic, input.stance, audio);
   let analysisWarning: string | undefined;
   if (input.settings.stanceAnalysis === 'semantic') {
+    if (constrainedBrowserDevice) disposeTranscriptionWorker();
     try {
       const semanticStance = await analyzeStanceSemantically({
         transcript,
@@ -121,6 +124,8 @@ export async function runAnalysis(input: {
     } catch (error) {
       if (input.signal?.aborted || isAbortError(error)) throw analysisAbortError();
       analysisWarning = `Semantic stance checking was unavailable, so fast phrase signals were used: ${error instanceof Error ? error.message : 'unknown error'}`;
+    } finally {
+      if (constrainedBrowserDevice) disposeStanceAnalyzer();
     }
   }
   const scores = calculateScores(audio, text);

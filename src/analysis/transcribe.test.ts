@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { prepareTranscriptionAudio, transcribeLocally } from './transcribe';
+import { disposeTranscriptionWorker, prepareTranscriptionAudio, transcribeLocally } from './transcribe';
 
 const SAMPLE_RATE = 16_000;
 
 afterEach(() => {
+  disposeTranscriptionWorker();
   vi.unstubAllGlobals();
 });
 
@@ -64,5 +65,58 @@ describe('local transcription cancellation', () => {
 
     await expect(transcription).rejects.toMatchObject({ name: 'AbortError' });
     expect(instance?.terminate).toHaveBeenCalledOnce();
+  });
+});
+
+describe('local transcription device fallback', () => {
+  it('restarts a poisoned GPU worker before retrying on WASM', async () => {
+    const instances: ControllableWorker[] = [];
+    class ControllableWorker {
+      onmessage: ((event: MessageEvent<Record<string, unknown>>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        instances.push(this);
+      }
+    }
+    vi.stubGlobal('Worker', ControllableWorker);
+
+    const progress = vi.fn();
+    const transcription = transcribeLocally(Float32Array.from([0.1, -0.1]), {
+      model: 'test/whisper',
+      device: 'auto',
+      onProgress: progress,
+    });
+    const firstMessage = instances[0].postMessage.mock.calls[0][0] as { id: string; device: string };
+
+    instances[0].onmessage?.({
+      data: { id: firstMessage.id, type: 'retry-wasm', message: 'Restarting on browser CPU…' },
+    } as unknown as MessageEvent<Record<string, unknown>>);
+
+    expect(instances[0].terminate).toHaveBeenCalledOnce();
+    expect(instances).toHaveLength(2);
+    const fallbackMessage = instances[1].postMessage.mock.calls[0][0] as { id: string; device: string; forceDevice?: string };
+    expect(fallbackMessage).toMatchObject({ id: firstMessage.id, device: 'auto', forceDevice: 'wasm' });
+    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ device: 'wasm' }));
+
+    instances[0].onerror?.({ message: 'late GPU worker error' } as unknown as ErrorEvent);
+    expect(instances[1].terminate).not.toHaveBeenCalled();
+
+    instances[1].onmessage?.({
+      data: {
+        id: firstMessage.id,
+        type: 'result',
+        text: 'A recovered transcript',
+        chunks: [],
+        device: 'wasm',
+      },
+    } as unknown as MessageEvent<Record<string, unknown>>);
+
+    await expect(transcription).resolves.toMatchObject({
+      text: 'A recovered transcript',
+      engine: expect.stringContaining('WASM'),
+    });
   });
 });

@@ -105,6 +105,7 @@ function comparisonMessage(language: SemanticStanceLanguage): string {
 function loadClassifier(id: string): Promise<ZeroShotPipeline> {
   if (!classifierPromise) {
     classifierPromise = pipeline('zero-shot-classification', MODEL, {
+      device: 'wasm',
       dtype: 'q8',
       progress_callback: (progress: { status?: string; progress?: number; file?: string }) => {
         post(id, {

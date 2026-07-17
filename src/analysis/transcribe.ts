@@ -1,9 +1,11 @@
 import type { SpeechLanguage } from '../types';
+import { shouldPreferWasmForDevice } from '../lib/transcriptionDevice';
 
 export interface TranscriptionProgress {
   stage: 'model' | 'transcription';
   message: string;
   progress?: number;
+  device?: 'webgpu' | 'wasm';
 }
 
 export interface TranscriptionResult {
@@ -17,6 +19,12 @@ interface PendingRequest {
   reject: (reason: Error) => void;
   onProgress?: (progress: TranscriptionProgress) => void;
   model: string;
+  requestedDevice: 'auto' | 'webgpu' | 'wasm';
+  preferWasm: boolean;
+  audio: Float32Array;
+  language: SpeechLanguage;
+  hasSignal: boolean;
+  fallbackAttempted: boolean;
   cleanup: () => void;
 }
 
@@ -26,6 +34,17 @@ const TRANSCRIPTION_SAMPLE_RATE = 16_000;
 const TRAILING_SILENCE_SECONDS = 0.2;
 const TARGET_RMS = 0.08;
 const MAX_GAIN = 12;
+
+export function preferWasmForCurrentDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const current = navigator as Navigator & { deviceMemory?: number };
+  return shouldPreferWasmForDevice({
+    userAgent: current.userAgent,
+    platform: current.platform,
+    maxTouchPoints: current.maxTouchPoints,
+    deviceMemory: current.deviceMemory,
+  });
+}
 
 function transcriptionAbortError(): DOMException {
   return new DOMException('Local transcription was cancelled.', 'AbortError');
@@ -39,6 +58,61 @@ function stopWorker(error: Error): void {
   pending.clear();
   worker?.terminate();
   worker = null;
+}
+
+export function disposeTranscriptionWorker(): void {
+  if (pending.size) {
+    stopWorker(transcriptionAbortError());
+    return;
+  }
+  worker?.terminate();
+  worker = null;
+}
+
+function postTranscriptionRequest(
+  id: string,
+  request: PendingRequest,
+  forceDevice?: 'webgpu' | 'wasm',
+): void {
+  // Auto/WebGPU keeps one prepared copy so a failed GPU runtime can be replaced
+  // by a fresh WASM worker. Known-WASM requests transfer their only copy.
+  const canTransferMaster = forceDevice === 'wasm' || request.requestedDevice === 'wasm';
+  const outbound = canTransferMaster ? request.audio : request.audio.slice();
+  if (canTransferMaster) request.audio = new Float32Array();
+  getWorker().postMessage({
+    type: 'transcribe',
+    id,
+    audio: outbound,
+    model: request.model,
+    device: request.requestedDevice,
+    forceDevice,
+    preferWasm: request.preferWasm,
+    language: request.language,
+    hasSignal: request.hasSignal,
+  }, [outbound.buffer]);
+}
+
+function restartRequestOnWasm(id: string, request: PendingRequest, message: string): void {
+  if (request.fallbackAttempted) {
+    stopWorker(new Error('Browser CPU fallback could not start after the GPU runtime failed.'));
+    return;
+  }
+  request.fallbackAttempted = true;
+  request.onProgress?.({ stage: 'model', device: 'wasm', message });
+
+  for (const [otherId, other] of pending) {
+    if (otherId === id) continue;
+    other.cleanup();
+    other.reject(new Error('The speech worker restarted on browser CPU. Please retry this analysis.'));
+    pending.delete(otherId);
+  }
+  worker?.terminate();
+  worker = null;
+  try {
+    postTranscriptionRequest(id, request, 'wasm');
+  } catch (error) {
+    stopWorker(error instanceof Error ? error : new Error('Browser CPU fallback could not start.'));
+  }
 }
 
 function hasSignal(audio: Float32Array): boolean {
@@ -83,8 +157,10 @@ export function prepareTranscriptionAudio(audio: Float32Array): Float32Array {
 
 function getWorker(): Worker {
   if (worker) return worker;
-  worker = new Worker(new URL('../workers/transcription.worker.ts', import.meta.url), { type: 'module' });
-  worker.onmessage = (event: MessageEvent<Record<string, unknown>>) => {
+  const nextWorker = new Worker(new URL('../workers/transcription.worker.ts', import.meta.url), { type: 'module' });
+  worker = nextWorker;
+  nextWorker.onmessage = (event: MessageEvent<Record<string, unknown>>) => {
+    if (worker !== nextWorker) return;
     const id = String(event.data.id);
     const request = pending.get(id);
     if (!request) return;
@@ -93,25 +169,31 @@ function getWorker(): Worker {
         stage: event.data.stage as TranscriptionProgress['stage'],
         message: String(event.data.message),
         progress: typeof event.data.progress === 'number' ? event.data.progress : undefined,
+        device: event.data.device === 'webgpu' || event.data.device === 'wasm' ? event.data.device : undefined,
       });
+      return;
+    }
+    if (event.data.type === 'retry-wasm') {
+      restartRequestOnWasm(id, request, String(event.data.message ?? 'Restarting the speech model on browser CPU (WASM)…'));
+      return;
+    }
+    if (event.data.type === 'error') {
+      stopWorker(new Error(String(event.data.error)));
       return;
     }
     pending.delete(id);
     request.cleanup();
-    if (event.data.type === 'error') {
-      request.reject(new Error(String(event.data.error)));
-      return;
-    }
     request.resolve({
       text: String(event.data.text ?? ''),
       chunks: (event.data.chunks ?? []) as TranscriptionResult['chunks'],
       engine: `Transformers.js · ${request.model}${event.data.device ? ` · ${String(event.data.device).toUpperCase()}` : ''}`,
     });
   };
-  worker.onerror = (event) => {
+  nextWorker.onerror = (event) => {
+    if (worker !== nextWorker) return;
     stopWorker(new Error(event.message || 'The transcription worker stopped.'));
   };
-  return worker;
+  return nextWorker;
 }
 
 export function transcribeLocally(
@@ -134,29 +216,25 @@ export function transcribeLocally(
       if (pending.has(id)) stopWorker(transcriptionAbortError());
     };
     const cleanup = () => options.signal?.removeEventListener('abort', onAbort);
-    pending.set(id, {
+    const request: PendingRequest = {
       resolve,
       reject,
       onProgress: options.onProgress,
       model: options.model,
+      requestedDevice: options.device,
+      preferWasm: options.device === 'auto' && preferWasmForCurrentDevice(),
+      audio: prepareTranscriptionAudio(audio),
+      language: options.language ?? 'en',
+      hasSignal: hasSignal(audio),
+      fallbackAttempted: false,
       cleanup,
-    });
+    };
+    pending.set(id, request);
     options.signal?.addEventListener('abort', onAbort, { once: true });
-    const transferable = prepareTranscriptionAudio(audio);
     try {
-      getWorker().postMessage({
-        type: 'transcribe',
-        id,
-        audio: transferable,
-        model: options.model,
-        device: options.device,
-        language: options.language ?? 'en',
-        hasSignal: hasSignal(audio),
-      }, [transferable.buffer]);
+      postTranscriptionRequest(id, request, request.preferWasm ? 'wasm' : undefined);
     } catch (error) {
-      pending.delete(id);
-      cleanup();
-      reject(error instanceof Error ? error : new Error('The transcription worker could not start.'));
+      stopWorker(error instanceof Error ? error : new Error('The transcription worker could not start.'));
     }
   });
 }

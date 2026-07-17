@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { disposeTranscriptionWorker } from '../analysis/transcribe';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { StorageBadge } from '../components/StorageBadge';
 import { useApp } from '../context/AppContext';
@@ -49,6 +50,12 @@ const speechModels: Record<SpeechLanguage, Array<{ value: string; label: string 
   ],
 };
 
+const computeDeviceLabels: Record<UserSettings['whisperDevice'], string> = {
+  auto: 'Auto · safe desktop GPU, CPU on mobile',
+  webgpu: 'WebGPU preferred · CPU fallback',
+  wasm: 'WASM / CPU · GPU disabled',
+};
+
 export function SettingsPage() {
   const { user, settings, storageStatus, saveSettings, deleteAccount } = useApp();
   const navigate = useNavigate();
@@ -77,8 +84,10 @@ export function SettingsPage() {
     event.preventDefault();
     setSaving(true);
     setError(null);
+    const computeDeviceChanged = settings?.whisperDevice !== draft.whisperDevice;
     try {
       await saveSettings(draft);
+      if (computeDeviceChanged) disposeTranscriptionWorker();
       setSaved(true);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Could not save settings.');
@@ -104,6 +113,8 @@ export function SettingsPage() {
     setSaved(false);
   };
   const selectedSpeechModel = speechModelDetails[draft.whisperModel];
+  const activeComputeDevice = settings?.whisperDevice ?? 'auto';
+  const computeDeviceUnsaved = draft.whisperDevice !== activeComputeDevice;
   const confirmDelete = async () => {
     setDeleting(true);
     try {
@@ -165,14 +176,15 @@ export function SettingsPage() {
             <div className="settings-fields two-column">
               <label><span>Default practice language</span><select value={draft.speechLanguage} onChange={(event) => chooseSpeechLanguage(event.target.value as SpeechLanguage)}><option value="en">English</option><option value="bn">বাংলা · Bengali</option><option value="hi">हिन्दी · Hindi</option></select></label>
               <label><span>Whisper model</span><select value={draft.whisperModel} onChange={(event) => update('whisperModel', event.target.value)}>{speechModels[draft.speechLanguage].map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}</select></label>
-              <label><span>Compute device</span><select value={draft.whisperDevice} onChange={(event) => update('whisperDevice', event.target.value as UserSettings['whisperDevice'])}><option value="auto">Auto detect</option><option value="webgpu">WebGPU</option><option value="wasm">WASM / CPU</option></select></label>
+              <label><span>Whisper compute backend</span><select value={draft.whisperDevice} onChange={(event) => update('whisperDevice', event.target.value as UserSettings['whisperDevice'])}><option value="auto">Auto · safe GPU detection</option><option value="webgpu">Prefer WebGPU · CPU fallback</option><option value="wasm">WASM / CPU · disable GPU</option></select></label>
             </div>
+            <p className={`settings-note${computeDeviceUnsaved ? ' warning' : ''}`}>{computeDeviceUnsaved ? `${computeDeviceLabels[draft.whisperDevice]} is selected but not active yet. Use Save settings below.` : `Active: ${computeDeviceLabels[activeComputeDevice]}.`}</p>
             {selectedSpeechModel && <div className={`speech-model-note${selectedSpeechModel.heavy ? ' heavy' : ''}`}><Cpu size={15} /><div><strong>{selectedSpeechModel.tier} local model</strong><span>{selectedSpeechModel.detail} Models download on first use and are cached when the browser allows it.</span></div></div>}
             <div className="stance-analysis-setting">
               <div><strong>Argument stance checker</strong><span>Checks whether the transcript actually supports the assigned side.</span></div>
               <select value={draft.stanceAnalysis} onChange={(event) => update('stanceAnalysis', event.target.value as UserSettings['stanceAnalysis'])}><option value="semantic">Multilingual semantic model · recommended</option><option value="signals">Fast phrase signals · no extra model</option></select>
             </div>
-            <p className="settings-note">The semantic option uses a multilingual NLI model in this browser (about 360 MB on first use) for English, Bengali, and Hindi. It is more capable than phrase matching, but mixed rebuttals, sarcasm, and transcription mistakes can still confuse it.</p>
+            <p className="settings-note">The semantic option uses a multilingual NLI model in this browser (about 360 MB on first use) for English, Bengali, and Hindi. It always runs through CPU/WASM and never requests a GPU adapter. It is more capable than phrase matching, but mixed rebuttals, sarcasm, and transcription mistakes can still confuse it.</p>
           </section>
 
           <section className="settings-card">
