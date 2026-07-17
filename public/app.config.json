@@ -1,0 +1,21 @@
+{
+  "storage": {
+    "mode": "auto",
+    "apiBaseUrl": "/api"
+  },
+  "ai": {
+    "provider": "browser",
+    "ollamaEndpoint": "http://localhost:11434",
+    "ollamaModel": "qwen3:4b",
+    "ollamaViaServer": false
+  },
+  "speech": {
+    "model": "onnx-community/whisper-tiny.en",
+    "device": "auto",
+    "language": "en"
+  },
+  "practice": {
+    "defaultDurationSeconds": 60,
+    "saveRecordings": true
+  }
+}

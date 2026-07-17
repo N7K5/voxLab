@@ -1,0 +1,22 @@
+{
+  "database": {
+    "url": "",
+    "host": "",
+    "port": 5432,
+    "database": "",
+    "username": "",
+    "password": "",
+    "ssl": false,
+    "sslRejectUnauthorized": true
+  },
+  "server": {
+    "port": 8787,
+    "sessionSecret": "replace-with-a-long-random-string",
+    "allowedOrigins": ["http://localhost:5173"],
+    "trustProxy": false
+  },
+  "ollama": {
+    "endpoint": "http://localhost:11434",
+    "allowUnauthenticated": false
+  }
+}
