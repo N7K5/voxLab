@@ -32,7 +32,9 @@ interface AppContextValue {
   deleteAccount: () => Promise<void>;
   saveSettings: (settings: UserSettings) => Promise<void>;
   saveAttempt: (attempt: PracticeAttempt) => Promise<void>;
+  saveAttempts: (attempts: PracticeAttempt[]) => Promise<void>;
   deleteAttempt: (id: string) => Promise<void>;
+  deleteAttempts: (ids: string[]) => Promise<void>;
   getAttempt: (id: string) => Promise<PracticeAttempt | null>;
   getRecording: (id: string) => Promise<Blob | null>;
   refreshAttempts: () => Promise<void>;
@@ -42,6 +44,15 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something unexpected happened.';
+}
+
+function attemptForList(attempt: PracticeAttempt): PracticeAttempt {
+  const { recording, ...summary } = attempt;
+  return {
+    ...summary,
+    hasRecording: Boolean(recording) || attempt.hasRecording,
+    recordingMimeType: recording?.type || attempt.recordingMimeType,
+  };
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -144,13 +155,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const saveAttempt = useCallback(async (attempt: PracticeAttempt) => {
     const current = requireRepository();
     await current.repository.saveAttempt(attempt);
-    await refreshAttempts();
-  }, [refreshAttempts, requireRepository]);
+    setAttempts((currentAttempts) => [
+      attemptForList(attempt),
+      ...currentAttempts.filter((item) => item.id !== attempt.id),
+    ].sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
+  }, [requireRepository]);
+
+  const saveAttempts = useCallback(async (nextAttempts: PracticeAttempt[]) => {
+    const current = requireRepository();
+    await current.repository.saveAttempts(nextAttempts);
+    const ids = new Set(nextAttempts.map((attempt) => attempt.id));
+    setAttempts((currentAttempts) => [
+      ...nextAttempts.map(attemptForList),
+      ...currentAttempts.filter((attempt) => !ids.has(attempt.id)),
+    ].sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
+  }, [requireRepository]);
 
   const deleteAttempt = useCallback(async (id: string) => {
     const current = requireRepository();
     await current.repository.deleteAttempt(id);
     setAttempts((currentAttempts) => currentAttempts.filter((attempt) => attempt.id !== id));
+  }, [requireRepository]);
+
+  const deleteAttempts = useCallback(async (ids: string[]) => {
+    const current = requireRepository();
+    await current.repository.deleteAttempts(ids);
+    const idSet = new Set(ids);
+    setAttempts((currentAttempts) => currentAttempts.filter((attempt) => !idSet.has(attempt.id)));
   }, [requireRepository]);
 
   const getAttempt = useCallback(async (id: string) => {
@@ -178,7 +209,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteAccount,
     saveSettings,
     saveAttempt,
+    saveAttempts,
     deleteAttempt,
+    deleteAttempts,
     getAttempt,
     getRecording,
     refreshAttempts,
@@ -188,6 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     config,
     deleteAccount,
     deleteAttempt,
+    deleteAttempts,
     getAttempt,
     getRecording,
     logIn,
@@ -196,6 +230,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshAttempts,
     repository,
     saveAttempt,
+    saveAttempts,
     saveSettings,
     settings,
     signUp,

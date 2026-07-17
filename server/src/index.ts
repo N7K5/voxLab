@@ -19,6 +19,7 @@ import {
 const AUDIO_TYPES = new Set(['audio/webm', 'audio/ogg', 'audio/mp4']);
 const MAX_RECORDING_BYTES = 15 * 1024 * 1024;
 const MAX_ATTEMPT_JSON_BYTES = 512 * 1024;
+const MAX_BATCH_ATTEMPT_JSON_BYTES = MAX_ATTEMPT_JSON_BYTES * 2;
 const MAX_OLLAMA_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 class RequestValidationError extends Error {}
@@ -38,6 +39,21 @@ const upload = multer({
     const mimeType = normalizedMimeType(file.mimetype);
     if (AUDIO_TYPES.has(mimeType)) callback(null, true);
     else callback(new UnsupportedRecordingError('Use a WebM, Ogg, or MP4 audio recording.'));
+  },
+});
+const batchUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_RECORDING_BYTES,
+    files: 2,
+    fields: 1,
+    fieldSize: MAX_BATCH_ATTEMPT_JSON_BYTES,
+    parts: 3,
+  },
+  fileFilter: (_request, file, callback) => {
+    const mimeType = normalizedMimeType(file.mimetype);
+    if (AUDIO_TYPES.has(mimeType)) callback(null, true);
+    else callback(new UnsupportedRecordingError('Use WebM, Ogg, or MP4 audio recordings.'));
   },
 });
 
@@ -302,6 +318,93 @@ app.post('/api/attempts', requireAuth, upload.single('recording'), async (reques
       response.status(400).json({ error: 'Attempt data is not valid JSON.' });
       return;
     }
+    next(error);
+  }
+});
+
+app.post('/api/attempts/batch', requireAuth, batchUpload.fields([
+  { name: 'recording0', maxCount: 1 },
+  { name: 'recording1', maxCount: 1 },
+]), async (request, response, next) => {
+  try {
+    if (typeof request.body?.attempts !== 'string') {
+      throw new RequestValidationError('Attempt data is required.');
+    }
+    const rawAttempts = JSON.parse(request.body.attempts) as unknown;
+    if (!Array.isArray(rawAttempts) || rawAttempts.length !== 2) {
+      throw new RequestValidationError('A 1v1 batch must contain exactly two attempts.');
+    }
+    const attempts = rawAttempts.map(validateAttempt);
+    if (new Set(attempts.map((attempt) => attempt.id)).size !== attempts.length) {
+      throw new RequestValidationError('Attempt IDs must be unique.');
+    }
+    const files = request.files as Record<string, Express.Multer.File[]> | undefined;
+    const recordings = attempts.map((_attempt, index) => files?.[`recording${index}`]?.[0]);
+    const recordingTypes = recordings.map((file) => file ? normalizedMimeType(file.mimetype) : null);
+    recordings.forEach((file, index) => {
+      if (file && !hasExpectedAudioSignature(file.buffer, recordingTypes[index]!)) {
+        throw new RequestValidationError(`Recording ${index + 1} does not match its declared audio type.`);
+      }
+    });
+
+    const client = await requirePool().connect();
+    try {
+      await client.query('BEGIN');
+      for (let index = 0; index < attempts.length; index += 1) {
+        const attempt = attempts[index];
+        const result = await client.query<{ id: string }>(`
+          INSERT INTO attempts (id, user_id, topic, stance, duration_seconds, transcript, report, recording, recording_mime_type, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT (id) DO UPDATE SET
+            topic = EXCLUDED.topic,
+            stance = EXCLUDED.stance,
+            duration_seconds = EXCLUDED.duration_seconds,
+            transcript = EXCLUDED.transcript,
+            report = EXCLUDED.report,
+            recording = COALESCE(EXCLUDED.recording, attempts.recording),
+            recording_mime_type = COALESCE(EXCLUDED.recording_mime_type, attempts.recording_mime_type)
+          WHERE attempts.user_id = EXCLUDED.user_id
+          RETURNING id
+        `, [
+          attempt.id,
+          request.user!.id,
+          JSON.stringify(attempt.topic),
+          attempt.stance,
+          attempt.durationSeconds,
+          attempt.transcript,
+          JSON.stringify(attempt.report),
+          recordings[index]?.buffer ?? null,
+          recordingTypes[index],
+          attempt.createdAt,
+        ]);
+        if (result.rowCount !== 1) throw new RequestValidationError('An attempt ID is already owned by another account.');
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+    response.status(204).end();
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      response.status(400).json({ error: 'Attempt data is not valid JSON.' });
+      return;
+    }
+    next(error);
+  }
+});
+
+app.delete('/api/attempts/batch', requireAuth, async (request, response, next) => {
+  try {
+    if (!Array.isArray(request.body?.ids) || request.body.ids.length < 1 || request.body.ids.length > 10) {
+      throw new RequestValidationError('Attempt IDs are invalid.');
+    }
+    const ids = [...new Set(request.body.ids.map((id: unknown) => validateId(typeof id === 'string' ? id : '')))] as string[];
+    await requirePool().query('DELETE FROM attempts WHERE user_id = $1 AND id = ANY($2::uuid[])', [request.user!.id, ids]);
+    response.status(204).end();
+  } catch (error) {
     next(error);
   }
 });
@@ -618,6 +721,9 @@ function validateSettings(value: unknown): Record<string, unknown> {
   if (value.whisperDevice !== 'auto' && value.whisperDevice !== 'webgpu' && value.whisperDevice !== 'wasm') {
     throw new RequestValidationError('Invalid speech-model device.');
   }
+  if (value.stanceAnalysis !== undefined && value.stanceAnalysis !== 'signals' && value.stanceAnalysis !== 'semantic') {
+    throw new RequestValidationError('Invalid stance-analysis mode.');
+  }
   if (typeof value.ollamaViaServer !== 'boolean' || typeof value.saveRecordings !== 'boolean') {
     throw new RequestValidationError('Settings contain invalid boolean values.');
   }
@@ -635,6 +741,7 @@ function validateSettings(value: unknown): Record<string, unknown> {
     ollamaViaServer: value.ollamaViaServer,
     whisperModel: boundedString(value.whisperModel, 'Speech model', 200),
     whisperDevice: value.whisperDevice,
+    stanceAnalysis: value.stanceAnalysis ?? 'semantic',
     saveRecordings: value.saveRecordings,
   };
 }
@@ -672,7 +779,7 @@ function validateCoachRequest(value: unknown): Record<string, unknown> {
     messages,
     stream: false,
     format,
-    options: { temperature: Math.max(0, Math.min(1, requestedTemperature)), num_predict: 900 },
+    options: { temperature: Math.max(0, Math.min(1, requestedTemperature)), num_predict: 1_600 },
   };
 }
 

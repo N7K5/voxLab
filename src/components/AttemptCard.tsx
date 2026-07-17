@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clock3, Trash2 } from 'lucide-react';
+import { ArrowUpRight, Clock3, Trash2, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { PracticeAttempt } from '../types';
 import { ScoreRing } from './ScoreRing';
@@ -14,6 +14,8 @@ function formatDate(value: string): string {
 }
 
 export function AttemptCard({ attempt, onDelete, compact = false }: { attempt: PracticeAttempt; onDelete?: () => void; compact?: boolean }) {
+  const duel = attempt.report.duel;
+  const duelSpeaker = duel ? (duel.currentSpeaker === 1 ? duel.speaker1 : duel.speaker2) : null;
   return (
     <article className={`attempt-card${compact ? ' compact' : ''}`}>
       <ScoreRing score={attempt.report.scores.overall} size="small" />
@@ -21,10 +23,11 @@ export function AttemptCard({ attempt, onDelete, compact = false }: { attempt: P
         <div className="attempt-meta">
           <span className={`difficulty-pill ${attempt.topic.difficulty}`}>{attempt.topic.difficulty}</span>
           <span className={`stance-pill ${attempt.stance}`}>{attempt.stance}</span>
+          {duelSpeaker && <span className="duel-attempt-pill"><UsersRound size={12} /> 1v1 · {duelSpeaker.name}</span>}
           <span><Clock3 size={12} /> {formatDate(attempt.createdAt)}</span>
         </div>
         <h3>{attempt.topic.prompt}</h3>
-        {!compact && <p>{attempt.report.feedback.summary}</p>}
+        {!compact && <p>{duel ? `${duel.verdict} ${attempt.report.feedback.summary}` : attempt.report.feedback.summary}</p>}
       </div>
       <div className="attempt-actions">
         {onDelete && (

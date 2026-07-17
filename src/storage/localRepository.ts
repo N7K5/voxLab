@@ -99,6 +99,7 @@ function validateLocalUser(value: unknown): value is LocalUser {
 function validatedSettings(settings: UserSettings): UserSettings {
   if (settings.aiProvider !== 'browser' && settings.aiProvider !== 'ollama') throw new Error('Invalid AI provider.');
   if (!['auto', 'webgpu', 'wasm'].includes(settings.whisperDevice)) throw new Error('Invalid speech-model device.');
+  if (!['signals', 'semantic'].includes(settings.stanceAnalysis)) throw new Error('Invalid stance-analysis mode.');
   if (typeof settings.ollamaViaServer !== 'boolean' || typeof settings.saveRecordings !== 'boolean') {
     throw new Error('Settings contain invalid boolean values.');
   }
@@ -117,6 +118,7 @@ function validatedSettings(settings: UserSettings): UserSettings {
     ollamaViaServer: settings.ollamaViaServer,
     whisperModel: settings.whisperModel,
     whisperDevice: settings.whisperDevice,
+    stanceAnalysis: settings.stanceAnalysis,
     saveRecordings: settings.saveRecordings,
   };
 }
@@ -299,35 +301,57 @@ export class LocalRepository implements AppRepository {
   }
 
   async saveAttempt(attempt: PracticeAttempt): Promise<void> {
+    await this.saveAttempts([attempt]);
+  }
+
+  async saveAttempts(attempts: PracticeAttempt[]): Promise<void> {
+    if (!attempts.length) return;
     const user = await this.requireCurrentUser();
-    if (attempt.userId !== user.id) throw new Error('Cannot save another user’s attempt.');
-    if (attempt.recording && attempt.recording.size > MAX_RECORDING_BYTES) throw new Error('Recording is too large.');
-    const existing = await this.getAttempt(attempt.id);
-    const recording = attempt.recording ?? existing?.recording;
-    const stored: PracticeAttempt = {
-      ...attempt,
-      userId: user.id,
-      recording,
-      hasRecording: Boolean(recording),
-      recordingMimeType: recording?.type || attempt.recordingMimeType,
-    };
+    if (new Set(attempts.map((attempt) => attempt.id)).size !== attempts.length) throw new Error('Attempt IDs must be unique.');
+    attempts.forEach((attempt) => {
+      if (attempt.userId !== user.id) throw new Error('Cannot save another user’s attempt.');
+      if (attempt.recording && attempt.recording.size > MAX_RECORDING_BYTES) throw new Error('Recording is too large.');
+    });
     const db = await this.open();
     const tx = db.transaction('attempts', 'readwrite');
-    tx.objectStore('attempts').put(stored);
-    await transactionDone(tx);
+    const store = tx.objectStore('attempts');
+    const done = transactionDone(tx);
+    attempts.forEach((attempt) => {
+      const request = store.get(attempt.id);
+      request.onsuccess = () => {
+        const existing = request.result as PracticeAttempt | undefined;
+        const recording = attempt.recording ?? existing?.recording;
+        store.put({
+          ...attempt,
+          userId: user.id,
+          recording,
+          hasRecording: Boolean(recording),
+          recordingMimeType: recording?.type || attempt.recordingMimeType,
+        });
+      };
+    });
+    await done;
   }
 
   async deleteAttempt(id: string): Promise<void> {
+    await this.deleteAttempts([id]);
+  }
+
+  async deleteAttempts(ids: string[]): Promise<void> {
+    if (!ids.length) return;
     const user = await this.requireCurrentUser();
     const db = await this.open();
     const tx = db.transaction('attempts', 'readwrite');
     const store = tx.objectStore('attempts');
-    const request = store.get(id);
-    request.onsuccess = () => {
-      const attempt = request.result as PracticeAttempt | undefined;
-      if (attempt?.userId === user.id) store.delete(id);
-    };
-    await transactionDone(tx);
+    const done = transactionDone(tx);
+    ids.forEach((id) => {
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const existing = request.result as PracticeAttempt | undefined;
+        if (existing?.userId === user.id) store.delete(id);
+      };
+    });
+    await done;
   }
 
   async getRecording(id: string): Promise<Blob | null> {

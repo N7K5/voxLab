@@ -50,6 +50,7 @@ export function settingsFromConfig(config: AppConfig): UserSettings {
     ollamaViaServer: config.ai.ollamaViaServer,
     whisperModel: config.speech.model,
     whisperDevice: config.speech.device,
+    stanceAnalysis: 'semantic',
     saveRecordings: config.practice.saveRecordings,
   };
 }

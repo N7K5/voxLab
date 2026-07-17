@@ -10,7 +10,9 @@ export interface AppRepository {
   listAttempts(): Promise<PracticeAttempt[]>;
   getAttempt(id: string): Promise<PracticeAttempt | null>;
   saveAttempt(attempt: PracticeAttempt): Promise<void>;
+  saveAttempts(attempts: PracticeAttempt[]): Promise<void>;
   deleteAttempt(id: string): Promise<void>;
+  deleteAttempts(ids: string[]): Promise<void>;
   getRecording(id: string): Promise<Blob | null>;
   loadSettings(defaults: UserSettings): Promise<UserSettings>;
   saveSettings(settings: UserSettings): Promise<void>;

@@ -18,9 +18,10 @@ function average(values: number[]): number {
 
 export function DashboardPage() {
   const { user, attempts, settings } = useApp();
-  const averageScore = average(attempts.map((attempt) => attempt.report.scores.overall));
-  const totalMinutes = Math.round(attempts.reduce((sum, attempt) => sum + attempt.durationSeconds, 0) / 60);
-  const bestScore = attempts.length ? Math.max(...attempts.map((attempt) => attempt.report.scores.overall)) : 0;
+  const personalAttempts = attempts.filter((attempt) => !attempt.report.duel || attempt.report.duel.currentSpeaker === 1);
+  const averageScore = average(personalAttempts.map((attempt) => attempt.report.scores.overall));
+  const totalMinutes = Math.round(personalAttempts.reduce((sum, attempt) => sum + attempt.durationSeconds, 0) / 60);
+  const bestScore = personalAttempts.length ? Math.max(...personalAttempts.map((attempt) => attempt.report.scores.overall)) : 0;
   const firstName = user?.username.split(/[\s._-]/)[0] ?? 'speaker';
 
   return (
@@ -32,7 +33,7 @@ export function DashboardPage() {
           <p>A focused minute is enough to reveal your pace, pauses, vocabulary, structure, and delivery.</p>
           <div className="hero-actions">
             <Link className="button primary large" to="/practice"><Mic2 size={19} /> Start a practice</Link>
-            {attempts[0] && <Link className="button secondary large" to={`/results/${attempts[0].id}`}>Last analysis <ArrowRight size={18} /></Link>}
+            {personalAttempts[0] && <Link className="button secondary large" to={`/results/${personalAttempts[0].id}`}>Last analysis <ArrowRight size={18} /></Link>}
           </div>
         </div>
         <div className="dashboard-hero-visual">
@@ -46,7 +47,7 @@ export function DashboardPage() {
       </section>
 
       <section className="stats-grid" aria-label="Practice statistics">
-        <article className="stat-card"><span className="stat-icon mint"><Target size={18} /></span><div><small>Practices</small><strong>{attempts.length}</strong><p>completed sessions</p></div></article>
+        <article className="stat-card"><span className="stat-icon mint"><Target size={18} /></span><div><small>Practices</small><strong>{personalAttempts.length}</strong><p>your completed turns</p></div></article>
         <article className="stat-card"><span className="stat-icon lilac"><Gauge size={18} /></span><div><small>Average</small><strong>{averageScore || '—'}</strong><p>overall score</p></div></article>
         <article className="stat-card"><span className="stat-icon gold"><Clock3 size={18} /></span><div><small>Speaking time</small><strong>{totalMinutes || '—'}</strong><p>{totalMinutes === 1 ? 'minute recorded' : 'minutes recorded'}</p></div></article>
         <article className="stat-card"><span className="stat-icon coral"><BarChart3 size={18} /></span><div><small>Personal best</small><strong>{bestScore || '—'}</strong><p>highest overall</p></div></article>
@@ -55,10 +56,10 @@ export function DashboardPage() {
       <section className="section-block">
         <div className="section-heading-row">
           <div><span className="eyebrow">Your progress</span><h2>Recent practices</h2></div>
-          {attempts.length > 0 && <Link className="text-link" to="/history">View all <ArrowRight size={15} /></Link>}
+          {personalAttempts.length > 0 && <Link className="text-link" to="/history">View all <ArrowRight size={15} /></Link>}
         </div>
-        {attempts.length ? (
-          <div className="attempt-list">{attempts.slice(0, 3).map((attempt) => <AttemptCard key={attempt.id} attempt={attempt} compact />)}</div>
+        {personalAttempts.length ? (
+          <div className="attempt-list">{personalAttempts.slice(0, 3).map((attempt) => <AttemptCard key={attempt.id} attempt={attempt} compact />)}</div>
         ) : (
           <div className="empty-panel">
             <span className="empty-icon"><Mic2 size={25} /></span>

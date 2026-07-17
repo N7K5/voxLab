@@ -16,12 +16,14 @@ Ollama is not used as an audio model. The browser measures pauses, pace, loudnes
 - Username/password signup and login with no email verification
 - 72 curated easy, medium, and hard prompts
 - User-selected or game-mode For/Against stances
+- Local 1v1 rounds with random opposite sides, sealed device handoff, and a shared score comparison
 - Adjustable 30–180 second timer (60 seconds by default)
 - Microphone check, countdown, live waveform, and early finish
 - Local Whisper transcription in a Web Worker through Transformers.js
-- Pause, silence, pacing, filler, vocabulary, structure, relevance, argument-evidence, pitch, volume, and clipping analytics
+- Pause, silence, pacing, filler, vocabulary, structure, relevance, semantic stance, argument-evidence, pitch, volume, and clipping analytics
 - Browser-generated feedback that works without an LLM
 - Optional structured coaching from Ollama
+- Evidence-backed weaknesses, transcript quotations and reframes, topic strategy, and spoken coaching with an installed on-device voice
 - Attempt history, saved playback, per-attempt deletion, and account deletion
 - Optional recording retention
 - Persistent system, dark, light, and dusk themes
@@ -38,7 +40,7 @@ npm run dev
 
 Open `http://localhost:5173`. The API also starts on `http://localhost:8787`. With no database configuration, the app automatically uses IndexedDB in the current browser.
 
-The first transcription downloads the configured Whisper ONNX model. It is then cached by the browser. Microphone access requires `localhost` or HTTPS.
+The first analysis downloads the configured Whisper ONNX model. The recommended semantic stance checker downloads a separate roughly 100 MB English NLI model. They are then cached when the browser permits it. Microphone access requires `localhost` or HTTPS.
 
 ## Deploy the browser-only app to GitHub Pages
 
@@ -75,7 +77,7 @@ Every later push to `main` runs the checks and deploys the updated browser app a
 
 - Username/password accounts, settings, history, analytics, transcripts, and enabled recordings are stored in that visitor's IndexedDB.
 - Microphone capture and local acoustic analysis run in the page over HTTPS.
-- Whisper downloads from Hugging Face on first use, then uses that browser's model cache.
+- Whisper and the optional semantic stance model download from Hugging Face on first use, then use that browser's model cache.
 - The deterministic browser coach works without any server or Ollama installation.
 - A visitor may choose Ollama only if Ollama is running on their own computer and allows the exact Pages origin. Pages never exposes your computer's Ollama instance.
 
@@ -188,10 +190,24 @@ The browser path is fully useful without Ollama:
 
 1. Raw microphone PCM and a compressed playback recording are captured locally.
 2. A small Whisper model runs locally via WebGPU when available, with WASM fallback.
-3. Deterministic signal and language analysis computes the metrics.
-4. A local rules-based coach produces evidence-backed strengths and drills.
+3. Deterministic signal and language analysis computes the metrics; the recommended local NLI model compares the transcript with the assigned motion.
+4. A local rules-based coach produces evidence-backed strengths, weaknesses, reframes, strategy, and drills.
+5. Spoken coaching uses a voice installed on the device. It does not send the recording anywhere or save generated coaching audio.
 
-Model files are downloaded from Hugging Face on first use unless you self-host them. Once loaded, inference itself happens in the browser. The app does not use the browser Web Speech API, which can route audio to a browser vendor.
+Model files are downloaded from Hugging Face on first use unless you self-host them. Once loaded, inference itself happens in the browser. Transcription does not use the browser Web Speech recognition API, which can route audio to a browser vendor.
+
+The microphone recording is never sent through browser speech-recognition services. Spoken coaching does use the Web Speech synthesis API, but VoxLab only offers voices that the browser marks as `localService`; availability and quality therefore depend on the operating system.
+
+### Browser model tiers
+
+The Settings page exposes four English transcription tiers:
+
+- **Fast:** Whisper Tiny English
+- **Balanced:** Whisper Base English
+- **Accurate:** Distil Whisper Small English; WebGPU recommended
+- **Maximum:** Whisper Small English; large download and a powerful desktop recommended
+
+The two larger options improve transcription at a real compute and memory cost. The maximum tier can approach a 1 GB first-time load on WebGPU. The semantic stance checker is separately switchable between the recommended local NLI model and fast phrase signals.
 
 ## About emotion and “confidence”
 
@@ -236,4 +252,4 @@ npm run build
 
 ## Current scope
 
-This MVP analyzes after the timed recording stops. It is not a realtime, interruptible, voice-to-voice assistant like ChatGPT voice mode. A realtime version would add streaming VAD/STT, a dialogue state machine, streaming model inference, and text-to-speech; none of that is required for the topic → speech → analysis practice loop.
+This app analyzes after each timed recording stops. Spoken coaching reads the finished brief; it is not a realtime, interruptible, voice-to-voice assistant like ChatGPT voice mode. A realtime version would add streaming VAD/STT, a dialogue state machine, and streaming model inference; none of that is required for the topic → speech → analysis practice loop.

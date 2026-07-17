@@ -7,6 +7,7 @@ const EXAMPLE_MARKERS = ['for example', 'for instance', 'such as', 'consider', '
 const OPENINGS = ['i believe', 'i think', 'my position', 'today i', 'the question', 'there are', 'let me'];
 const CONCLUSIONS = ['in conclusion', 'to conclude', 'to sum up', 'ultimately', 'for these reasons', 'that is why', 'overall'];
 const FILLERS = ['you know', 'i mean', 'sort of', 'kind of', 'basically', 'actually', 'literally', 'um', 'uh', 'erm', 'like'];
+const NEGATIVE_MOTION_MARKERS = ['should not', 'should never', 'must not', 'be banned', 'be prohibited', 'be restricted', 'avoid', 'more harm than good'];
 
 function tokenize(text: string): string[] {
   return text.toLocaleLowerCase().match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?/gu) ?? [];
@@ -63,11 +64,24 @@ export function analyzeText(transcript: string, topic: Topic, stance: Stance, au
     : Math.max(audio.recordedDurationSeconds, 1);
   const speakingMinutes = paceDuration / 60;
   const lower = transcript.toLocaleLowerCase();
-  const negativeSignals = countPhrases(lower, ['should not', "shouldn't", 'must not', 'harm', 'risk', 'disadvantage', 'oppose', 'disagree', 'worse', 'ban', 'prohibit']);
+  const explicitSupport = countPhrases(lower, ['i support', 'i agree', 'i am for', "i'm for", 'we should accept', 'this is a good idea']);
+  const explicitOpposition = countPhrases(lower, ['i oppose', 'i disagree', 'i am against', "i'm against", 'we should reject', 'this is a bad idea']);
+  const negativeSignals = countPhrases(lower, ['should not', "shouldn't", 'must not', 'cannot support', 'harm', 'risk', 'disadvantage', 'oppose', 'disagree', 'worse', 'ban', 'prohibit']) + explicitOpposition * 2;
   const affirmativeText = lower.replace(/\b(?:should|must)\s+not\b|\bshouldn't\b/g, ' ');
-  const positiveSignals = countPhrases(affirmativeText, ['should', 'must', 'benefit', 'advantage', 'support', 'agree', 'better', 'important']);
-  const aligned = stance === 'for' ? positiveSignals > negativeSignals : negativeSignals > positiveSignals;
-  const mixed = positiveSignals > 0 && negativeSignals > 0 && Math.abs(positiveSignals - negativeSignals) <= 1;
+  const positiveSignals = countPhrases(affirmativeText, ['should', 'must', 'benefit', 'advantage', 'support', 'agree', 'better', 'important', 'good idea']) + explicitSupport * 2;
+  const motionIsNegative = countPhrases(topic.prompt, NEGATIVE_MOTION_MARKERS) > 0;
+  // Generic positive/negative language maps reasonably to affirmative motions, but it
+  // becomes ambiguous for motions that already contain a negation (for example,
+  // “X should be banned”). For those motions, the fast path only makes a decisive call
+  // from an explicit support/opposition statement; semantic NLI is the recommended path.
+  const supportsMotion = motionIsNegative ? explicitSupport * 3 : positiveSignals;
+  const opposesMotion = motionIsNegative ? explicitOpposition * 3 : negativeSignals;
+  const expectedSignals = stance === 'for' ? supportsMotion : opposesMotion;
+  const contrarySignals = stance === 'for' ? opposesMotion : supportsMotion;
+  const mixed = expectedSignals > 0 && contrarySignals > 0 && Math.abs(expectedSignals - contrarySignals) <= 1;
+  const aligned = expectedSignals >= 2 && expectedSignals >= contrarySignals + 2;
+  const opposed = contrarySignals >= 2 && contrarySignals >= expectedSignals + 2;
+  const stanceSignal = words.length < 12 || keywordHits === 0 ? 'unclear' : mixed ? 'mixed' : aligned ? 'aligned' : opposed ? 'opposed' : 'unclear';
   const sentences = transcript.split(/[.!?]+/).map((part) => part.trim()).filter(Boolean);
   const sentenceLengths = sentences.map((sentence) => tokenize(sentence).length).filter(Boolean);
   const openingSlice = words.slice(0, 22).join(' ');
@@ -87,7 +101,9 @@ export function analyzeText(transcript: string, topic: Topic, stance: Stance, au
     reasoningMarkerCount: countPhrases(lower, REASONING_MARKERS),
     exampleMarkerCount: countPhrases(lower, EXAMPLE_MARKERS),
     topicKeywordCoverage: rootedTopicKeywords.size ? keywordHits / rootedTopicKeywords.size : 0,
-    stanceSignal: words.length < 12 ? 'unclear' : mixed ? 'mixed' : aligned ? 'aligned' : 'unclear',
+    stanceSignal,
+    stanceConfidence: stanceSignal === 'unclear' ? undefined : Math.min(0.95, 0.55 + Math.abs(expectedSignals - contrarySignals) * 0.08),
+    stanceEngine: 'Fast phrase signals',
     hasOpening: OPENINGS.some((phrase) => openingSlice.includes(phrase)),
     hasConclusion: CONCLUSIONS.some((phrase) => conclusionSlice.includes(phrase)),
     sentenceCount: sentences.length || (words.length ? 1 : 0),

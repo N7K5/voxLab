@@ -18,6 +18,13 @@ import { StorageBadge } from '../components/StorageBadge';
 import { useApp } from '../context/AppContext';
 import type { AiProvider, UserSettings } from '../types';
 
+const speechModelDetails: Record<string, { tier: string; detail: string; heavy?: boolean }> = {
+  'onnx-community/whisper-tiny.en': { tier: 'Fast', detail: 'Smallest download; best for quick practice on most devices.' },
+  'onnx-community/whisper-base.en': { tier: 'Balanced', detail: 'Better recognition with a moderate first-time download.' },
+  'distil-whisper/distil-small.en': { tier: 'Accurate', detail: 'A larger distilled English model; WebGPU recommended.', heavy: true },
+  'onnx-community/whisper-small.en': { tier: 'Maximum', detail: 'Highest browser tier; can approach 1 GB on WebGPU and needs a powerful desktop.', heavy: true },
+};
+
 export function SettingsPage() {
   const { user, settings, storageStatus, saveSettings, deleteAccount } = useApp();
   const navigate = useNavigate();
@@ -64,6 +71,7 @@ export function SettingsPage() {
     } : current);
     setSaved(false);
   };
+  const selectedSpeechModel = speechModelDetails[draft.whisperModel];
   const confirmDelete = async () => {
     setDeleting(true);
     try {
@@ -122,9 +130,15 @@ export function SettingsPage() {
           <section className="settings-card">
             <div className="settings-card-heading"><span className="settings-icon"><Cpu size={19} /></span><div><h2>Speech transcription</h2><p>The first run downloads the selected Whisper model and caches it in your browser.</p></div></div>
             <div className="settings-fields two-column">
-              <label><span>Whisper model</span><select value={draft.whisperModel} onChange={(event) => update('whisperModel', event.target.value)}><option value="onnx-community/whisper-tiny.en">Whisper tiny.en · fastest</option><option value="onnx-community/whisper-base.en">Whisper base.en · more accurate</option></select></label>
+              <label><span>Whisper model</span><select value={draft.whisperModel} onChange={(event) => update('whisperModel', event.target.value)}><option value="onnx-community/whisper-tiny.en">Fast · Whisper Tiny English</option><option value="onnx-community/whisper-base.en">Balanced · Whisper Base English</option><option value="distil-whisper/distil-small.en">Accurate · Distil Whisper Small English</option><option value="onnx-community/whisper-small.en">Maximum · Whisper Small English</option></select></label>
               <label><span>Compute device</span><select value={draft.whisperDevice} onChange={(event) => update('whisperDevice', event.target.value as UserSettings['whisperDevice'])}><option value="auto">Auto detect</option><option value="webgpu">WebGPU</option><option value="wasm">WASM / CPU</option></select></label>
             </div>
+            {selectedSpeechModel && <div className={`speech-model-note${selectedSpeechModel.heavy ? ' heavy' : ''}`}><Cpu size={15} /><div><strong>{selectedSpeechModel.tier} local model</strong><span>{selectedSpeechModel.detail} Models download on first use and are cached when the browser allows it.</span></div></div>}
+            <div className="stance-analysis-setting">
+              <div><strong>Argument stance checker</strong><span>Checks whether the transcript actually supports the assigned side.</span></div>
+              <select value={draft.stanceAnalysis} onChange={(event) => update('stanceAnalysis', event.target.value as UserSettings['stanceAnalysis'])}><option value="semantic">Semantic local model · recommended</option><option value="signals">Fast phrase signals · no extra model</option></select>
+            </div>
+            <p className="settings-note">The semantic option uses an English NLI model in this browser (about 100 MB on first use). It is much better at opposite-side detection, but mixed rebuttals, sarcasm, and transcription mistakes can still confuse it.</p>
           </section>
 
           <section className="settings-card">

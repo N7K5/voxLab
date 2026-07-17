@@ -3,6 +3,7 @@ import { resampleTo16Khz } from '../audio/recorder';
 import { analyzeAudio, calculateClippingRatio } from './audioAnalysis';
 import { requestOllamaFeedback } from './ollamaCoach';
 import { browserFeedback, calculateScores } from './scoring';
+import { analyzeStanceSemantically, mergeStanceAssessment } from './stanceAnalysis';
 import { analyzeText } from './textAnalysis';
 import { transcribeLocally, type TranscriptionProgress } from './transcribe';
 
@@ -62,9 +63,30 @@ export async function runAnalysis(input: {
 
   const audio = await audioPromise;
   input.onProgress?.({ stage: 'language', message: 'Checking fluency, vocabulary, structure, and relevance…' });
-  const text = analyzeText(transcript, input.topic, input.stance, audio);
+  let text = analyzeText(transcript, input.topic, input.stance, audio);
+  let analysisWarning: string | undefined;
+  if (input.settings.stanceAnalysis === 'semantic') {
+    try {
+      const semanticStance = await analyzeStanceSemantically({
+        transcript,
+        topic: input.topic.prompt,
+        stance: input.stance,
+        onProgress: (message, progress) => input.onProgress?.({ stage: 'language', message, progress }),
+      });
+      text = {
+        ...text,
+        ...mergeStanceAssessment(text, semanticStance),
+      };
+    } catch (error) {
+      analysisWarning = `Semantic stance checking was unavailable, so fast phrase signals were used: ${error instanceof Error ? error.message : 'unknown error'}`;
+    }
+  }
   const scores = calculateScores(audio, text);
-  let feedback = browserFeedback(scores, audio, text);
+  let feedback = browserFeedback(scores, audio, text, {
+    transcript,
+    topic: input.topic,
+    stance: input.stance,
+  });
   let transcriptionWarning: string | undefined;
 
   if (input.settings.aiProvider === 'ollama') {
@@ -78,6 +100,6 @@ export async function runAnalysis(input: {
 
   return {
     transcript,
-    report: { audio, text, scores, feedback, transcriptionEngine, transcriptionWarning },
+    report: { audio, text, scores, feedback, transcriptionEngine, transcriptionWarning, analysisWarning },
   };
 }

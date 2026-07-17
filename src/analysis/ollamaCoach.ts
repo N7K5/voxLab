@@ -21,8 +21,51 @@ const feedbackSchema = {
         required: ['title', 'detail', 'drill'],
       },
     },
+    weaknesses: {
+      type: 'array',
+      minItems: 3,
+      maxItems: 3,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string' },
+          evidence: { type: 'string' },
+          whyItMatters: { type: 'string' },
+          howToImprove: { type: 'string' },
+        },
+        required: ['title', 'evidence', 'whyItMatters', 'howToImprove'],
+      },
+    },
+    reframes: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 2,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          original: { type: 'string' },
+          issue: { type: 'string' },
+          revised: { type: 'string' },
+          principle: { type: 'string' },
+        },
+        required: ['original', 'issue', 'revised', 'principle'],
+      },
+    },
+    topicStrategy: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        coreQuestion: { type: 'string' },
+        angles: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 3 },
+        strongestCounterargument: { type: 'string' },
+        nextOutline: { type: 'array', items: { type: 'string' }, minItems: 4, maxItems: 4 },
+      },
+      required: ['coreQuestion', 'angles', 'strongestCounterargument', 'nextOutline'],
+    },
   },
-  required: ['summary', 'strengths', 'improvements'],
+  required: ['summary', 'strengths', 'improvements', 'weaknesses', 'reframes', 'topicStrategy'],
 };
 
 function buildPrompt(input: {
@@ -42,10 +85,17 @@ ${input.transcript.slice(0, 12_000)}
 Measured analytics (these are authoritative):
 ${JSON.stringify({ audio: input.audio, language: input.text, scores: input.scores })}
 
-Return the requested JSON only. Give exactly three prioritized improvements, each with a concrete drill. Base every observation on the transcript or supplied analytics. Do not invent timestamps, facial cues, confidence, emotion, identity, or acoustic facts. Do not diagnose the speaker. Distinguish a deliberate rhetorical pause from a hesitation when the evidence is ambiguous. Keep the summary under 55 words and each list item under 45 words.`;
+Return the requested JSON only. Give exactly three prioritized improvements and exactly three weaknesses. For every weakness, separate the observed evidence, why it matters to a listener, and how to improve it. Include one or two reframes whose "original" text is copied exactly from the transcript, then give a tighter version without changing the speaker's position. Build a topic strategy with three reasoning angles and a four-step next outline.
+
+Base every observation on the transcript or supplied analytics. Do not invent timestamps, quotations, facial cues, confidence, emotion, identity, or acoustic facts. Do not diagnose the speaker. Distinguish a deliberate rhetorical pause from a hesitation when the evidence is ambiguous. Keep the summary under 55 words and each individual field concise.`;
 }
 
-function parseContent(content: string, model: string): CoachFeedback {
+function stringField(value: unknown, message: string): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(message);
+  return value.trim();
+}
+
+function parseContent(content: string, model: string, transcript: string): CoachFeedback {
   const cleaned = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   const parsed = JSON.parse(cleaned) as Partial<CoachFeedback>;
   if (typeof parsed.summary !== 'string' || !Array.isArray(parsed.strengths) || !Array.isArray(parsed.improvements)) {
@@ -60,10 +110,47 @@ function parseContent(content: string, model: string): CoachFeedback {
   if (improvements.length !== 3) throw new Error('Ollama did not return three improvements.');
   const strengths = parsed.strengths.filter((value): value is string => typeof value === 'string').slice(0, 3);
   if (strengths.length < 2) throw new Error('Ollama did not return two usable strengths.');
+  if (!Array.isArray(parsed.weaknesses) || parsed.weaknesses.length !== 3) {
+    throw new Error('Ollama did not return three usable weaknesses.');
+  }
+  const weaknesses = parsed.weaknesses.map((item) => ({
+    title: stringField(item?.title, 'Ollama returned an incomplete weakness.'),
+    evidence: stringField(item?.evidence, 'Ollama returned an incomplete weakness.'),
+    whyItMatters: stringField(item?.whyItMatters, 'Ollama returned an incomplete weakness.'),
+    howToImprove: stringField(item?.howToImprove, 'Ollama returned an incomplete weakness.'),
+  }));
+  if (!Array.isArray(parsed.reframes) || parsed.reframes.length < 1) {
+    throw new Error('Ollama did not return a usable sentence reframe.');
+  }
+  const normalizedTranscript = transcript.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  const reframes = parsed.reframes.slice(0, 2).map((item) => {
+    const original = stringField(item?.original, 'Ollama returned an incomplete sentence reframe.');
+    if (!normalizedTranscript.includes(original.replace(/\s+/g, ' ').trim().toLocaleLowerCase())) {
+      throw new Error('Ollama returned a quotation that was not in the transcript.');
+    }
+    return {
+      original,
+      issue: stringField(item?.issue, 'Ollama returned an incomplete sentence reframe.'),
+      revised: stringField(item?.revised, 'Ollama returned an incomplete sentence reframe.'),
+      principle: stringField(item?.principle, 'Ollama returned an incomplete sentence reframe.'),
+    };
+  });
+  const strategy = parsed.topicStrategy;
+  if (!strategy || !Array.isArray(strategy.angles) || strategy.angles.length < 3 || !Array.isArray(strategy.nextOutline) || strategy.nextOutline.length < 4) {
+    throw new Error('Ollama returned an incomplete topic strategy.');
+  }
   return {
     summary: parsed.summary,
     strengths,
     improvements,
+    weaknesses,
+    reframes,
+    topicStrategy: {
+      coreQuestion: stringField(strategy.coreQuestion, 'Ollama returned an incomplete topic strategy.'),
+      angles: strategy.angles.slice(0, 3).map((value) => stringField(value, 'Ollama returned an incomplete topic strategy.')),
+      strongestCounterargument: stringField(strategy.strongestCounterargument, 'Ollama returned an incomplete topic strategy.'),
+      nextOutline: strategy.nextOutline.slice(0, 4).map((value) => stringField(value, 'Ollama returned an incomplete topic strategy.')),
+    },
     provider: 'ollama',
     model,
   };
@@ -88,7 +175,7 @@ export async function requestOllamaFeedback(
     messages: [{ role: 'user', content: prompt }],
     stream: false,
     format: feedbackSchema,
-    options: { temperature: 0.2 },
+    options: { temperature: 0.2, num_predict: 1_600 },
   };
   const endpoint = settings.ollamaViaServer
     ? `${apiBaseUrl.replace(/\/+$/, '')}/ai/coach`
@@ -113,5 +200,5 @@ export async function requestOllamaFeedback(
   const result = await response.json().catch(() => null) as { message?: { content?: string }; error?: string } | null;
   if (!response.ok) throw new Error(result?.error || `Ollama request failed (${response.status}).`);
   if (!result?.message?.content) throw new Error('Ollama returned no coaching text.');
-  return parseContent(result.message.content, settings.ollamaModel);
+  return parseContent(result.message.content, settings.ollamaModel, input.transcript);
 }

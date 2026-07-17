@@ -100,8 +100,28 @@ export class RemoteRepository implements AppRepository {
     await this.request<void>('/attempts', { method: 'POST', body: form });
   }
 
+  async saveAttempts(attempts: PracticeAttempt[]): Promise<void> {
+    if (!attempts.length) return;
+    if (attempts.length === 1) {
+      await this.saveAttempt(attempts[0]);
+      return;
+    }
+    const form = new FormData();
+    form.append('attempts', JSON.stringify(attempts.map(({ recording: _recording, ...attempt }) => attempt)));
+    attempts.forEach((attempt, index) => {
+      if (attempt.recording) form.append(`recording${index}`, attempt.recording, `speech-${index + 1}.${recordingExtension(attempt.recording.type)}`);
+    });
+    await this.request<void>('/attempts/batch', { method: 'POST', body: form });
+  }
+
   deleteAttempt(id: string): Promise<void> {
     return this.request<void>(`/attempts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  deleteAttempts(ids: string[]): Promise<void> {
+    if (!ids.length) return Promise.resolve();
+    if (ids.length === 1) return this.deleteAttempt(ids[0]);
+    return this.request<void>('/attempts/batch', { method: 'DELETE', body: JSON.stringify({ ids }) });
   }
 
   async getRecording(id: string): Promise<Blob | null> {

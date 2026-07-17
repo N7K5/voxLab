@@ -1,6 +1,7 @@
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type Stance = 'for' | 'against';
 export type StanceMode = 'choose' | 'game';
+export type PracticeMode = 'solo' | 'duel';
 export type AiProvider = 'browser' | 'ollama';
 export type StorageMode = 'auto' | 'browser' | 'database';
 
@@ -56,7 +57,9 @@ export interface TextMetrics {
   reasoningMarkerCount: number;
   exampleMarkerCount: number;
   topicKeywordCoverage: number;
-  stanceSignal: 'aligned' | 'mixed' | 'unclear';
+  stanceSignal: 'aligned' | 'opposed' | 'mixed' | 'unclear';
+  stanceConfidence?: number;
+  stanceEngine?: string;
   hasOpening: boolean;
   hasConclusion: boolean;
   sentenceCount: number;
@@ -82,8 +85,50 @@ export interface CoachFeedback {
     detail: string;
     drill: string;
   }>;
+  weaknesses?: CoachingWeakness[];
+  reframes?: SentenceReframe[];
+  topicStrategy?: TopicStrategy;
   provider: AiProvider;
   model?: string;
+}
+
+export interface CoachingWeakness {
+  title: string;
+  evidence: string;
+  whyItMatters: string;
+  howToImprove: string;
+}
+
+export interface SentenceReframe {
+  original: string;
+  issue: string;
+  revised: string;
+  principle: string;
+}
+
+export interface TopicStrategy {
+  coreQuestion: string;
+  angles: string[];
+  strongestCounterargument: string;
+  nextOutline: string[];
+}
+
+export interface DuelParticipant {
+  attemptId: string;
+  name: string;
+  stance: Stance;
+  scores: ScoreBreakdown;
+}
+
+export interface DuelComparison {
+  duelId: string;
+  currentSpeaker: 1 | 2;
+  speaker1: DuelParticipant;
+  speaker2: DuelParticipant;
+  winner: 1 | 2 | 'tie';
+  margin: number;
+  verdict: string;
+  swingFactors: string[];
 }
 
 export interface AnalysisReport {
@@ -93,6 +138,8 @@ export interface AnalysisReport {
   feedback: CoachFeedback;
   transcriptionEngine: string;
   transcriptionWarning?: string;
+  analysisWarning?: string;
+  duel?: DuelComparison;
 }
 
 export interface PracticeAttempt {
@@ -123,6 +170,7 @@ export interface UserSettings {
   ollamaViaServer: boolean;
   whisperModel: string;
   whisperDevice: 'auto' | 'webgpu' | 'wasm';
+  stanceAnalysis: 'signals' | 'semantic';
   saveRecordings: boolean;
 }
 

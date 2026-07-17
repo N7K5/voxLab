@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AudioMetrics, TextMetrics, Topic } from '../types';
 import { ollamaChatEndpoint } from './ollamaCoach';
 import { calculateScores } from './scoring';
+import { mergeStanceAssessment } from './stanceAnalysis';
 import { analyzeText } from './textAnalysis';
 
 const audio: AudioMetrics = {
@@ -68,6 +69,38 @@ describe('analysis helpers', () => {
     expect(metrics.transitionVariety).toBeGreaterThanOrEqual(3);
     expect(metrics.averageSentenceWords).toBeGreaterThan(5);
     expect(metrics.topicKeywordCoverage).toBeGreaterThan(0.4);
+  });
+
+  it('detects a speech that clearly argues the opposite assigned side and caps its score', () => {
+    const transcript = 'I oppose this motion. Schools should not teach financial literacy because the timetable is already crowded. Students can learn money skills at home, and adding another subject would reduce time for science and language. For example, teachers would need to remove an existing lesson. In conclusion, financial literacy should not become a school subject.';
+    const metrics = analyzeText(transcript, topic, 'for', { ...audio, speakingSpanSeconds: 28, voicedSeconds: 25 });
+    const scores = calculateScores({ ...audio, speakingSpanSeconds: 28, voicedSeconds: 25 }, metrics);
+    expect(metrics.stanceSignal).toBe('opposed');
+    expect(scores.relevance).toBeLessThanOrEqual(28);
+    expect(scores.overall).toBeLessThanOrEqual(45);
+  });
+
+  it('treats the same opposing argument as aligned when against was assigned', () => {
+    const transcript = 'I oppose this motion. Schools should not teach financial literacy because the timetable is already crowded. Students can learn money skills at home, and adding another subject would reduce time for science and language. In conclusion, financial literacy should not become a school subject.';
+    const metrics = analyzeText(transcript, topic, 'against', { ...audio, speakingSpanSeconds: 24, voicedSeconds: 21 });
+    expect(metrics.stanceSignal).toBe('aligned');
+  });
+
+  it('does not invert an explicit position when the motion itself is negative', () => {
+    const negativeTopic: Topic = { id: 'negative', prompt: 'Remote exam-proctoring software should be banned.', difficulty: 'medium', category: 'Education' };
+    const transcript = 'I oppose this motion. Remote exam proctoring software should not be banned because universities need a way to protect exam integrity. Better privacy rules are preferable to removing the software entirely.';
+    const metrics = analyzeText(transcript, negativeTopic, 'against', { ...audio, speakingSpanSeconds: 22, voicedSeconds: 19 });
+    expect(metrics.stanceSignal).toBe('aligned');
+  });
+
+  it('keeps a decisive fast stance result when semantic analysis is inconclusive', () => {
+    const merged = mergeStanceAssessment(
+      { stanceSignal: 'opposed', stanceConfidence: 0.79, stanceEngine: 'Fast phrase signals' },
+      { signal: 'unclear', confidence: 0.51, engine: 'Local semantic NLI' },
+    );
+    expect(merged.stanceSignal).toBe('opposed');
+    expect(merged.stanceConfidence).toBe(0.79);
+    expect(merged.stanceEngine).toContain('inconclusive');
   });
 
   it('keeps an average speech in the developing range', () => {

@@ -20,6 +20,9 @@ import {
   Square,
   Target,
   TriangleAlert,
+  Trophy,
+  UserRound,
+  UsersRound,
   Volume2,
 } from 'lucide-react';
 import {
@@ -30,16 +33,34 @@ import {
   type FormEvent,
 } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { compareDuel } from '../analysis/duelComparison';
 import { runAnalysis, TranscriptionUnavailableError, type AnalysisProgress } from '../analysis/runAnalysis';
 import { VoiceRecorder, type RecordingResult } from '../audio/recorder';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { Waveform } from '../components/Waveform';
 import { useApp } from '../context/AppContext';
 import { randomTopic } from '../data/topics';
-import type { Difficulty, Stance, StanceMode, Topic } from '../types';
+import type {
+  AnalysisReport,
+  Difficulty,
+  PracticeAttempt,
+  PracticeMode,
+  Stance,
+  StanceMode,
+  Topic,
+} from '../types';
 
-type PracticeStep = 'setup' | 'ready' | 'recording' | 'review' | 'processing' | 'manual';
+type PracticeStep = 'setup' | 'ready' | 'recording' | 'review' | 'processing' | 'manual' | 'handoff';
 type ProcessingPhase = 'voice' | 'transcript' | 'language' | 'coaching' | 'saving';
+
+interface PendingDuelTurn {
+  id: string;
+  transcript: string;
+  report: AnalysisReport;
+  recording: RecordingResult;
+  stance: Stance;
+  createdAt: string;
+}
 
 const durations = [30, 60, 90, 120];
 const difficultyDetails: Record<Difficulty, { title: string; description: string }> = {
@@ -68,6 +89,10 @@ function randomStance(): Stance {
   return Math.random() > 0.5 ? 'for' : 'against';
 }
 
+function oppositeStance(stance: Stance): Stance {
+  return stance === 'for' ? 'against' : 'for';
+}
+
 function formatTime(seconds: number): string {
   const safe = Math.max(0, Math.ceil(seconds));
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
@@ -78,9 +103,10 @@ function errorMessage(error: unknown): string {
 }
 
 export function PracticePage() {
-  const { user, settings, config, saveAttempt, storageStatus } = useApp();
+  const { user, settings, config, saveAttempt, saveAttempts, storageStatus } = useApp();
   const navigate = useNavigate();
   const [step, setStep] = useState<PracticeStep>('setup');
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>('solo');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
   const [stanceMode, setStanceMode] = useState<StanceMode>('choose');
   const [stance, setStance] = useState<Stance>('for');
@@ -96,12 +122,21 @@ export function PracticePage() {
   const [manualReason, setManualReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [activeSpeaker, setActiveSpeaker] = useState<1 | 2>(1);
+  const [speaker1Name, setSpeaker1Name] = useState('Speaker 1');
+  const [speaker2Name, setSpeaker2Name] = useState('Opponent');
+  const [duelId, setDuelId] = useState<string | null>(null);
+  const [pendingDuel, setPendingDuel] = useState<PendingDuelTurn | null>(null);
   const recorderRef = useRef<VoiceRecorder | null>(null);
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef(0);
   const stoppingRef = useRef(false);
   const startingRef = useRef(false);
   const topicDrawTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (user && speaker1Name === 'Speaker 1') setSpeaker1Name(user.username);
+  }, [speaker1Name, user]);
 
   useEffect(() => {
     if (!recording) {
@@ -143,7 +178,11 @@ export function PracticePage() {
   };
 
   const prepare = () => {
-    if (stanceMode === 'game') setStance(randomStance());
+    const nextStance = practiceMode === 'duel' || stanceMode === 'game' ? randomStance() : stance;
+    setStance(nextStance);
+    setActiveSpeaker(1);
+    setPendingDuel(null);
+    setDuelId(practiceMode === 'duel' ? crypto.randomUUID() : null);
     setError(null);
     setStep('ready');
   };
@@ -213,6 +252,45 @@ export function PracticePage() {
     setStep('ready');
   };
 
+  const clearTurn = () => {
+    setRecording(null);
+    setElapsed(0);
+    setLevels([]);
+    setManualTranscript('');
+    setManualReason('');
+    setProgress(null);
+    setError(null);
+  };
+
+  const cancelDuel = () => {
+    clearTurn();
+    setPendingDuel(null);
+    setDuelId(null);
+    setActiveSpeaker(1);
+    setStep('setup');
+  };
+
+  const buildAttempt = (
+    id: string,
+    turnRecording: RecordingResult,
+    turnStance: Stance,
+    transcript: string,
+    report: AnalysisReport,
+    createdAt: string,
+  ): PracticeAttempt => ({
+    id,
+    userId: user.id,
+    topic,
+    stance: turnStance,
+    durationSeconds: Math.max(1, Math.round(turnRecording.durationSeconds)),
+    transcript,
+    report,
+    createdAt,
+    recordingMimeType: turnRecording.mimeType,
+    hasRecording: settings.saveRecordings,
+    recording: settings.saveRecordings ? turnRecording.blob : undefined,
+  });
+
   const analyze = async (transcriptOverride?: string) => {
     if (!recording) return;
     setError(null);
@@ -231,21 +309,53 @@ export function PracticePage() {
           setProgress((currentProgress) => currentProgress?.stage === nextProgress.stage ? currentProgress : nextProgress);
         },
       });
+
+      if (practiceMode === 'duel' && activeSpeaker === 1) {
+        setPendingDuel({
+          id: crypto.randomUUID(),
+          transcript: analyzed.transcript,
+          report: analyzed.report,
+          recording,
+          stance,
+          createdAt: new Date().toISOString(),
+        });
+        setActiveSpeaker(2);
+        setStance(oppositeStance(stance));
+        clearTurn();
+        setStep('handoff');
+        return;
+      }
+
       setProgress({ stage: 'saving', message: storageStatus?.kind === 'database' ? 'Saving to your configured server…' : 'Saving privately in this browser…' });
       const id = crypto.randomUUID();
-      await saveAttempt({
-        id,
-        userId: user.id,
-        topic,
-        stance,
-        durationSeconds: Math.max(1, Math.round(recording.durationSeconds)),
-        transcript: analyzed.transcript,
-        report: analyzed.report,
-        createdAt: new Date().toISOString(),
-        recordingMimeType: recording.mimeType,
-        hasRecording: settings.saveRecordings,
-        recording: settings.saveRecordings ? recording.blob : undefined,
-      });
+
+      if (practiceMode === 'duel' && activeSpeaker === 2) {
+        if (!pendingDuel || !duelId) throw new Error('The first speaker’s sealed turn is missing. Please start the 1v1 again.');
+        const comparison = compareDuel(
+          duelId,
+          { attemptId: pendingDuel.id, name: speaker1Name.trim() || 'Speaker 1', stance: pendingDuel.stance, report: pendingDuel.report },
+          { attemptId: id, name: speaker2Name.trim() || 'Opponent', stance, report: analyzed.report },
+        );
+        const firstAttempt = buildAttempt(
+          pendingDuel.id,
+          pendingDuel.recording,
+          pendingDuel.stance,
+          pendingDuel.transcript,
+          { ...pendingDuel.report, duel: { ...comparison, currentSpeaker: 1 } },
+          pendingDuel.createdAt,
+        );
+        const secondAttempt = buildAttempt(
+          id,
+          recording,
+          stance,
+          analyzed.transcript,
+          { ...analyzed.report, duel: { ...comparison, currentSpeaker: 2 } },
+          new Date().toISOString(),
+        );
+        await saveAttempts([firstAttempt, secondAttempt]);
+      } else {
+        await saveAttempt(buildAttempt(id, recording, stance, analyzed.transcript, analyzed.report, new Date().toISOString()));
+      }
       navigate(`/results/${id}`, { replace: true });
     } catch (analysisError) {
       if (analysisError instanceof TranscriptionUnavailableError) {
@@ -273,12 +383,20 @@ export function PracticePage() {
   if (step === 'setup') {
     return (
       <div className="page practice-page setup-page">
-        <div className="practice-page-header"><div><span className="eyebrow"><Target size={14} /> Build a new round</span><h1>Set the challenge</h1><p>Pick the pressure level. The prompt is random; the practice is yours.</p></div><span className="step-count">Step 1 of 3</span></div>
+        <div className="practice-page-header"><div><span className="eyebrow"><Target size={14} /> Build a new round</span><h1>Set the challenge</h1><p>Train solo, or pass one device between two local opponents.</p></div><span className="step-count">Step 1 of 3</span></div>
 
         <div className="setup-layout">
           <div className="setup-controls">
             <section className="setup-section">
-              <div className="setup-section-heading"><span>01</span><div><h2>Difficulty</h2><p>How much complexity do you want today?</p></div></div>
+              <div className="setup-section-heading"><span>01</span><div><h2>Round format</h2><p>Take a focused solo rep or challenge someone beside you.</p></div></div>
+              <div className="mode-grid format-grid">
+                <button type="button" className={`mode-choice${practiceMode === 'solo' ? ' selected' : ''}`} onClick={() => setPracticeMode('solo')}><UserRound size={21} /><span><strong>Solo practice</strong><small>One speech and a personal brief</small></span></button>
+                <button type="button" className={`mode-choice${practiceMode === 'duel' ? ' selected' : ''}`} onClick={() => setPracticeMode('duel')}><UsersRound size={21} /><span><strong>Local 1v1</strong><small>Opposite sides on one device</small></span></button>
+              </div>
+            </section>
+
+            <section className="setup-section">
+              <div className="setup-section-heading"><span>02</span><div><h2>Difficulty</h2><p>How much complexity do you want today?</p></div></div>
               <div className="difficulty-grid">
                 {(Object.keys(difficultyDetails) as Difficulty[]).map((option) => (
                   <button key={option} type="button" className={`difficulty-choice ${option}${difficulty === option ? ' selected' : ''}`} onClick={() => changeDifficulty(option)}>
@@ -291,16 +409,30 @@ export function PracticePage() {
             </section>
 
             <section className="setup-section">
-              <div className="setup-section-heading"><span>02</span><div><h2>Choose your side</h2><p>Stay in control, or make it a reflex test.</p></div></div>
-              <div className="mode-grid">
-                <button type="button" className={`mode-choice${stanceMode === 'choose' ? ' selected' : ''}`} onClick={() => setStanceMode('choose')}><Target size={20} /><span><strong>I’ll choose</strong><small>Pick for or against</small></span></button>
-                <button type="button" className={`mode-choice${stanceMode === 'game' ? ' selected' : ''}`} onClick={() => setStanceMode('game')}><Dices size={20} /><span><strong>Game mode</strong><small>Random side revealed next</small></span></button>
-              </div>
-              {stanceMode === 'choose' && <div className="stance-toggle"><button type="button" className={stance === 'for' ? 'selected for' : ''} onClick={() => setStance('for')}><Check size={16} /> For</button><button type="button" className={stance === 'against' ? 'selected against' : ''} onClick={() => setStance('against')}><ArrowLeft size={16} /> Against</button></div>}
+              {practiceMode === 'solo' ? (
+                <>
+                  <div className="setup-section-heading"><span>03</span><div><h2>Choose your side</h2><p>Stay in control, or make it a reflex test.</p></div></div>
+                  <div className="mode-grid">
+                    <button type="button" className={`mode-choice${stanceMode === 'choose' ? ' selected' : ''}`} onClick={() => setStanceMode('choose')}><Target size={20} /><span><strong>I’ll choose</strong><small>Pick for or against</small></span></button>
+                    <button type="button" className={`mode-choice${stanceMode === 'game' ? ' selected' : ''}`} onClick={() => setStanceMode('game')}><Dices size={20} /><span><strong>Game mode</strong><small>Random side revealed next</small></span></button>
+                  </div>
+                  {stanceMode === 'choose' && <div className="stance-toggle"><button type="button" className={stance === 'for' ? 'selected for' : ''} onClick={() => setStance('for')}><Check size={16} /> For</button><button type="button" className={stance === 'against' ? 'selected against' : ''} onClick={() => setStance('against')}><ArrowLeft size={16} /> Against</button></div>}
+                </>
+              ) : (
+                <>
+                  <div className="setup-section-heading"><span>03</span><div><h2>Name the speakers</h2><p>The first side is random. The second speaker receives the opposite side.</p></div></div>
+                  <div className="duel-name-grid">
+                    <label><span>Speaker 1 · account owner</span><input value={speaker1Name} onChange={(event) => setSpeaker1Name(event.target.value)} maxLength={32} placeholder="Speaker 1" /></label>
+                    <span className="duel-versus">VS</span>
+                    <label><span>Speaker 2 · local guest</span><input value={speaker2Name} onChange={(event) => setSpeaker2Name(event.target.value)} maxLength={32} placeholder="Opponent" /></label>
+                  </div>
+                  <p className="duel-storage-note"><ShieldCheck size={14} /> Both analyses—and both recordings when saving is enabled—are stored under {speaker1Name.trim() || 'Speaker 1'}’s account.</p>
+                </>
+              )}
             </section>
 
             <section className="setup-section">
-              <div className="setup-section-heading"><span>03</span><div><h2>Speaking time</h2><p>One minute is the sweet spot. Customize it when you need more room.</p></div></div>
+              <div className="setup-section-heading"><span>04</span><div><h2>Speaking time</h2><p>{practiceMode === 'duel' ? 'Each speaker gets the same amount of time.' : 'One minute is the sweet spot. Customize it when you need more room.'}</p></div></div>
               <div className="duration-pills">{durations.map((seconds) => <button key={seconds} type="button" className={duration === seconds ? 'selected' : ''} onClick={() => setDuration(seconds)}>{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</button>)}</div>
               <label className="duration-slider"><span>Custom duration</span><strong>{formatTime(duration)}</strong><input type="range" min={30} max={180} step={15} value={duration} onChange={(event) => setDuration(Number(event.target.value))} /></label>
             </section>
@@ -312,12 +444,30 @@ export function PracticePage() {
               <div className="topic-preview-top"><span className={`difficulty-pill ${topic.difficulty}`}>{topic.difficulty}</span><span>{topic.category}</span></div>
               <div className="topic-quote-mark">“</div>
               <h2>{topic.prompt}</h2>
-              <p>{stanceMode === 'game' ? 'Your side will be revealed when you lock in this prompt.' : `You will argue ${stance}.`}</p>
+              <p>{practiceMode === 'duel' ? 'Speaker 1 gets a random side. Speaker 2 takes the opposite.' : stanceMode === 'game' ? 'Your side will be revealed when you lock in this prompt.' : `You will argue ${stance}.`}</p>
               <button className="shuffle-button" type="button" disabled={drawingTopic} onClick={shuffleTopic}>{drawingTopic ? <Dices size={16} /> : <RefreshCw size={16} />} {drawingTopic ? 'Drawing…' : 'Draw another prompt'}</button>
-              <div className="topic-preview-footer"><span><Clock3 size={15} /> {formatTime(duration)}</span><span><CircleDot size={15} /> {stanceMode === 'game' ? 'Random side' : stance}</span></div>
-              <button className="button primary large full" type="button" disabled={drawingTopic} onClick={prepare}>Lock it in <ChevronRight size={18} /></button>
+              <div className="topic-preview-footer"><span><Clock3 size={15} /> {formatTime(duration)}{practiceMode === 'duel' ? ' each' : ''}</span><span><CircleDot size={15} /> {practiceMode === 'duel' ? 'Local 1v1' : stanceMode === 'game' ? 'Random side' : stance}</span></div>
+              <button className="button primary large full" type="button" disabled={drawingTopic} onClick={prepare}>{practiceMode === 'duel' ? 'Start the 1v1' : 'Lock it in'} <ChevronRight size={18} /></button>
             </div>
           </aside>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'handoff' && pendingDuel) {
+    return (
+      <div className="handoff-page">
+        <div className="handoff-card">
+          <span className="handoff-seal"><Check size={26} /></span>
+          <span className="eyebrow"><UsersRound size={14} /> Turn 1 sealed</span>
+          <h1>Pass the device to {speaker2Name.trim() || 'Speaker 2'}</h1>
+          <p>{speaker1Name.trim() || 'Speaker 1'}’s score and coaching stay hidden until both speeches are complete.</p>
+          <div className="handoff-motion"><span>Same motion</span><strong>{topic.prompt}</strong></div>
+          <div className="handoff-side"><span>{speaker2Name.trim() || 'Speaker 2'}, your side is</span><strong className={stance}>{stance}</strong></div>
+          <button className="button primary large full" type="button" onClick={() => setStep('ready')}>I have the device <ChevronRight size={18} /></button>
+          <button className="text-link handoff-cancel" type="button" onClick={cancelDuel}>Cancel this 1v1</button>
+          <div className="handoff-privacy"><ShieldCheck size={15} /> This guest turn will be saved under {speaker1Name.trim() || 'Speaker 1'}’s account.</div>
         </div>
       </div>
     );
@@ -326,10 +476,10 @@ export function PracticePage() {
   if (step === 'ready') {
     return (
       <div className="page practice-page ready-page">
-        <button className="text-link back-button" type="button" onClick={() => setStep('setup')}><ArrowLeft size={15} /> Change setup</button>
+        <button className="text-link back-button" type="button" onClick={() => setStep(practiceMode === 'duel' && activeSpeaker === 2 ? 'handoff' : 'setup')}><ArrowLeft size={15} /> {practiceMode === 'duel' && activeSpeaker === 2 ? 'Back to handoff' : 'Change setup'}</button>
         <div className="ready-layout">
           <section className="ready-prompt">
-            <div className="ready-meta"><span className={`difficulty-pill ${topic.difficulty}`}>{topic.difficulty}</span><span>{topic.category}</span></div>
+            <div className="ready-meta"><span className={`difficulty-pill ${topic.difficulty}`}>{topic.difficulty}</span><span>{topic.category}</span>{practiceMode === 'duel' && <span className="duel-turn-pill"><UsersRound size={12} /> {activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} · turn {activeSpeaker}</span>}</div>
             <span className={`stance-reveal ${stance}`}><Sparkles size={15} /> Argue {stance}</span>
             <h1>{topic.prompt}</h1>
             <div className="prep-framework">
@@ -341,7 +491,7 @@ export function PracticePage() {
           </section>
           <aside className="ready-recorder-card">
             <span className="ready-mic"><Mic2 size={30} /></span>
-            <h2>{formatTime(duration)} on the clock</h2>
+            <h2>{practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} · ` : ''}{formatTime(duration)} on the clock</h2>
             <p>Your browser will ask for microphone access. The countdown starts only after access is granted.</p>
             {error && <div className="form-error" role="alert">{error}</div>}
             <button className="button primary large full" type="button" disabled={starting} onClick={() => void startRecording()}>{starting ? <><LoaderCircle size={19} className="spin" /> Waiting for microphone…</> : <><Mic2 size={19} /> Start recording</>}</button>
@@ -356,7 +506,7 @@ export function PracticePage() {
     return (
       <div className="recording-page">
         <div className="recording-live-label"><span /> Recording live</div>
-        <div className="recording-topic"><span>Argue {stance}</span><h1>{topic.prompt}</h1></div>
+        <div className="recording-topic"><span>{practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} · ` : ''}Argue {stance}</span><h1>{topic.prompt}</h1></div>
         <div className="recording-stage">
           <div className="record-timer" style={{ '--timer-progress': `${timerProgress * 360}deg` } as CSSProperties}>
             <div><strong>{formatTime(remaining)}</strong><span>remaining</span></div>
@@ -373,7 +523,7 @@ export function PracticePage() {
   if (step === 'review' && recording) {
     return (
       <div className="page practice-page review-page">
-        <div className="practice-page-header"><div><span className="eyebrow"><Check size={14} /> Recording complete</span><h1>Listen once. Then analyze.</h1><p>You can redo the take before any analysis or saving happens.</p></div><span className="step-count">Step 2 of 3</span></div>
+        <div className="practice-page-header"><div><span className="eyebrow"><Check size={14} /> {practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} recorded` : 'Recording complete'}</span><h1>Listen once. Then analyze.</h1><p>{practiceMode === 'duel' && activeSpeaker === 1 ? 'This turn will be sealed before the device handoff.' : 'You can redo the take before any analysis or saving happens.'}</p></div><span className="step-count">{practiceMode === 'duel' ? `Speaker ${activeSpeaker} of 2` : 'Step 2 of 3'}</span></div>
         <div className="review-layout">
           <section className="review-player-card">
             <div className="review-topic"><span className={`stance-pill ${stance}`}>{stance}</span><h2>{topic.prompt}</h2></div>
@@ -386,9 +536,9 @@ export function PracticePage() {
             <h2>Analyze voice and words</h2>
             <p>VoxLab will measure pauses, energy, pitch, pace, fillers, vocabulary, structure, and relevance.</p>
             {error && <div className="form-error" role="alert">{error}</div>}
-            <button className="button primary large full" type="button" onClick={() => void analyze()}><Sparkles size={18} /> Analyze this speech</button>
+            <button className="button primary large full" type="button" onClick={() => void analyze()}><Sparkles size={18} /> {practiceMode === 'duel' && activeSpeaker === 1 ? 'Analyze and seal turn' : practiceMode === 'duel' ? 'Analyze and compare' : 'Analyze this speech'}</button>
             <button className="button secondary full" type="button" onClick={resetRecording}><RotateCcw size={17} /> Record again</button>
-            <p className="model-note">First-time transcription may download the local Whisper model. It is cached for later practices.</p>
+            <p className="model-note">First-time analysis may download the selected Whisper model and semantic stance model. They are cached for later practices.</p>
           </aside>
         </div>
       </div>
