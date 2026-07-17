@@ -69,9 +69,16 @@ describe('Bengali text analysis', () => {
     expect(scores.overall).toBeLessThanOrEqual(45);
     expect(feedback.language).toBe('bn');
     expect(feedback.summary).toMatch(/[\u0980-\u09ff]/u);
-    expect(feedback.reframes?.[0]?.original).toBeTruthy();
-    expect(transcript).toContain(feedback.reframes?.[0]?.original ?? 'not found');
+    expect(feedback.reframes).toEqual([]);
     expect(analyzeText(transcript, topic, 'against', audio).stanceSignal).toBe('aligned');
+  });
+
+  it('does not treat Bengali word prefixes or meaningful মানে as removable fillers', () => {
+    const transcript = 'বাংলা বাংলায় কথা বলার মানে নিজের ভাব স্পষ্টভাবে প্রকাশ করা।';
+    const metrics = analyzeText(transcript, topic, 'for', audio);
+    const feedback = browserFeedback(calculateScores(audio, metrics), audio, metrics, { transcript, topic, stance: 'for' });
+
+    expect(feedback.reframes).toEqual([]);
   });
 
   it('does not invert explicit opposition when the Bengali motion is negative', () => {
@@ -85,5 +92,30 @@ describe('Bengali text analysis', () => {
     const transcript = 'আমি এই প্রস্তাবের বিপক্ষে। স্কুলে মোবাইল ফোন নিষিদ্ধ করা উচিত নয়, কারণ জরুরি সময়ে যোগাযোগ দরকার। শিক্ষকেরা স্পষ্ট নিয়ম তৈরি করতে পারেন। উদাহরণস্বরূপ, ক্লাসের সময় ফোন বন্ধ রাখা যায়। পরিশেষে, সম্পূর্ণ নিষেধাজ্ঞার বদলে নিয়ন্ত্রিত ব্যবহার ভালো।';
 
     expect(analyzeText(transcript, negativeTopic, 'against', audio).stanceSignal).toBe('aligned');
+  });
+
+  it('distinguishes Bengali support from a negated বেশি ক্ষতি comparison', () => {
+    const sanctionsTopic: Topic = {
+      id: 'bn-sanctions',
+      prompt: 'অর্থনৈতিক নিষেধাজ্ঞা উপকারের চেয়ে বেশি ক্ষতি করে।',
+      difficulty: 'hard',
+      category: 'আন্তর্জাতিক সম্পর্ক',
+      language: 'bn',
+    };
+    const support = 'অর্থনৈতিক নিষেধাজ্ঞা উপকারের চেয়ে বেশি ক্ষতি করে কারণ সাধারণ মানুষ বেশি দাম দেয় অথচ নেতারা সেই খরচ থেকে সুরক্ষিত থাকে।';
+    const opposition = 'অর্থনৈতিক নিষেধাজ্ঞা উপকারের চেয়ে বেশি ক্ষতি করে না কারণ লক্ষ্যভিত্তিক আর্থিক চাপ যুদ্ধ ছাড়াই নীতি বদলাতে সাহায্য করতে পারে।';
+
+    expect(analyzeText(support, sanctionsTopic, 'for', audio).stanceSignal).toBe('aligned');
+    expect(analyzeText(opposition, sanctionsTopic, 'against', audio).stanceSignal).toBe('aligned');
+    expect(analyzeText(opposition, sanctionsTopic, 'for', audio).stanceSignal).toBe('opposed');
+  });
+
+  it('removes a Bengali hesitation before a danda without inventing wording', () => {
+    const transcript = 'স্কুলে আর্থিক শিক্ষা থাকা উচিত উম।';
+    const metrics = analyzeText(transcript, topic, 'for', audio);
+    const feedback = browserFeedback(calculateScores(audio, metrics), audio, metrics, { transcript, topic, stance: 'for' });
+
+    expect(feedback.reframes).toHaveLength(1);
+    expect(feedback.reframes?.[0]?.revised).toBe('স্কুলে আর্থিক শিক্ষা থাকা উচিত।');
   });
 });

@@ -53,7 +53,7 @@ export function settingsFromConfig(config: AppConfig): UserSettings {
     whisperModel: modelForSpeechLanguage(config.speech.model, config.speech.language),
     whisperDevice: config.speech.device,
     speechLanguage: config.speech.language,
-    stanceAnalysis: config.speech.language === 'bn' ? 'signals' : 'semantic',
+    stanceAnalysis: 'semantic',
     saveRecordings: config.practice.saveRecordings,
   };
 }

@@ -15,6 +15,7 @@ interface LanguageAnalysisProfile {
   negativeSignals: readonly string[];
   negatedAffirmatives: readonly string[];
   negativeMotionMarkers: readonly string[];
+  negativeMotionOppositionMarkers: readonly string[];
 }
 
 const ENGLISH_PROFILE: LanguageAnalysisProfile = {
@@ -32,6 +33,7 @@ const ENGLISH_PROFILE: LanguageAnalysisProfile = {
   negativeSignals: ['should not', "shouldn't", 'must not', 'cannot support', 'harm', 'risk', 'disadvantage', 'oppose', 'disagree', 'worse', 'ban', 'prohibit'],
   negatedAffirmatives: ['should not', "shouldn't", 'must not'],
   negativeMotionMarkers: ['should not', 'should never', 'must not', 'be banned', 'be prohibited', 'be restricted', 'avoid', 'more harm than good'],
+  negativeMotionOppositionMarkers: ['should not be banned', 'should not be prohibited', 'should not be restricted', 'must not be banned', 'should remain legal', 'should be allowed', 'do not cause more harm than good', 'does not cause more harm than good', "don't cause more harm than good", "doesn't cause more harm than good", 'cause less harm than good', 'do more good than harm', 'does more good than harm'],
 };
 
 const BENGALI_PROFILE: LanguageAnalysisProfile = {
@@ -48,12 +50,32 @@ const BENGALI_PROFILE: LanguageAnalysisProfile = {
   positiveSignals: ['উচিত', 'অবশ্যই', 'উপকার', 'সুবিধা', 'লাভ', 'সমর্থন', 'একমত', 'পক্ষে', 'ভালো', 'উন্নতি', 'গুরুত্বপূর্ণ'],
   negativeSignals: ['উচিত নয়', 'উচিত নয়', 'সমর্থন করতে পারি না', 'ক্ষতি', 'ঝুঁকি', 'অসুবিধা', 'বিরোধিতা', 'বিপক্ষে', 'একমত নই', 'একমত নয়', 'খারাপ', 'নিষিদ্ধ', 'প্রত্যাখ্যান'],
   negatedAffirmatives: ['উচিত নয়', 'উচিত নয়', 'অবশ্যই নয়', 'অবশ্যই নয়', 'একমত নই', 'একমত নয়'],
-  negativeMotionMarkers: ['উচিত নয়', 'উচিত নয়', 'কখনো উচিত নয়', 'কখনো উচিত নয়', 'নিষিদ্ধ করা উচিত', 'নিষিদ্ধ হওয়া উচিত', 'নিষিদ্ধ হওয়া উচিত', 'সীমিত করা উচিত', 'এড়ানো উচিত', 'এড়িয়ে চলা উচিত', 'লাভের চেয়ে ক্ষতি বেশি', 'লাভের চেয়ে ক্ষতি বেশি'],
+  negativeMotionMarkers: ['উচিত নয়', 'উচিত নয়', 'কখনো উচিত নয়', 'কখনো উচিত নয়', 'নিষিদ্ধ করা উচিত', 'নিষিদ্ধ হওয়া উচিত', 'নিষিদ্ধ হওয়া উচিত', 'সীমিত করা উচিত', 'এড়ানো উচিত', 'এড়িয়ে চলা উচিত', 'লাভের চেয়ে ক্ষতি বেশি', 'লাভের চেয়ে ক্ষতি বেশি', 'উপকারের চেয়ে বেশি ক্ষতি', 'উপকারের চেয়ে বেশি ক্ষতি'],
+  negativeMotionOppositionMarkers: ['নিষিদ্ধ করা উচিত নয়', 'নিষিদ্ধ করা উচিত নয়', 'নিষিদ্ধ হওয়া উচিত নয়', 'নিষিদ্ধ হওয়া উচিত নয়', 'সীমিত করা উচিত নয়', 'সীমিত করা উচিত নয়', 'অনুমতি দেওয়া উচিত', 'অনুমতি দেওয়া উচিত', 'উপকারের চেয়ে বেশি ক্ষতি করে না', 'উপকারের চেয়ে বেশি ক্ষতি করে না', 'উপকারের চেয়ে বেশি ক্ষতি ঘটায় না', 'উপকারের চেয়ে বেশি ক্ষতি ঘটায় না', 'ক্ষতির চেয়ে উপকার বেশি', 'ক্ষতির চেয়ে উপকার বেশি'],
+};
+
+const HINDI_PROFILE: LanguageAnalysisProfile = {
+  locale: 'hi',
+  stopWords: new Set('मैं हम तुम आप वह वे यह ये उस उन एक और या लेकिन कि जो यदि तो क्योंकि लिए से द्वारा साथ में पर तक का के की को है हैं था थी थे होगा होगी होंगे होना होता होती होते करना करता करती करते करें चाहिए सकता सकती सकते नहीं न क्या क्यों कौन किस उनके हमारे आपका अपनी अपने इसका इसके इसलिए भी बहुत अधिक कम'.split(' ')),
+  transitions: ['पहला', 'पहली बात', 'दूसरा', 'दूसरी बात', 'तीसरा', 'हालाँकि', 'फिर भी', 'इसलिए', 'क्योंकि', 'उदाहरण के लिए', 'मिसाल के तौर पर', 'इसके अलावा', 'दूसरी ओर', 'परिणामस्वरूप', 'अंततः', 'अंत में'],
+  reasoningMarkers: ['क्योंकि', 'चूँकि', 'चूंकि', 'इसलिए', 'परिणामस्वरूप', 'इसका अर्थ है', 'जिसका परिणाम', 'इस कारण', 'अतः', 'नतीजतन', 'जिससे'],
+  exampleMarkers: ['उदाहरण के लिए', 'मिसाल के तौर पर', 'जैसे', 'मान लीजिए', 'कल्पना कीजिए', 'प्रमाण', 'शोध', 'अध्ययन', 'आँकड़े', 'आंकड़े'],
+  openings: ['मैं मानता हूँ', 'मैं मानती हूँ', 'मेरा मानना है', 'मेरा पक्ष', 'आज मैं', 'प्रश्न यह है', 'मैं इस प्रस्ताव के पक्ष में', 'मैं प्रस्ताव के पक्ष में'],
+  conclusions: ['निष्कर्ष में', 'अंत में', 'कुल मिलाकर', 'इन कारणों से', 'इसलिए', 'अतः', 'आखिरकार'],
+  fillers: ['उम', 'उह', 'मतलब', 'असल में', 'मूल रूप से', 'जैसे कि', 'क्या कहते हैं', 'ख़ैर', 'खैर'],
+  explicitSupport: ['मैं इस प्रस्ताव के पक्ष में हूँ', 'मैं प्रस्ताव के पक्ष में हूँ', 'मैं इस प्रस्ताव का समर्थन करता हूँ', 'मैं इस प्रस्ताव का समर्थन करती हूँ', 'मैं सहमत हूँ', 'हमें यह प्रस्ताव स्वीकार करना चाहिए', 'यह एक अच्छा विचार है'],
+  explicitOpposition: ['मैं इस प्रस्ताव के विपक्ष में हूँ', 'मैं प्रस्ताव के विपक्ष में हूँ', 'मैं इस प्रस्ताव के खिलाफ हूँ', 'मैं इस प्रस्ताव का विरोध करता हूँ', 'मैं इस प्रस्ताव का विरोध करती हूँ', 'मैं असहमत हूँ', 'हमें यह प्रस्ताव अस्वीकार करना चाहिए', 'यह एक बुरा विचार है'],
+  positiveSignals: ['चाहिए', 'अवश्य', 'लाभ', 'फ़ायदा', 'फायदा', 'समर्थन', 'सहमत', 'पक्ष में', 'बेहतर', 'महत्वपूर्ण', 'अच्छा विचार', 'सुधार'],
+  negativeSignals: ['नहीं चाहिए', 'नहीं होना चाहिए', 'नहीं होनी चाहिए', 'नहीं होने चाहिए', 'समर्थन नहीं', 'नुकसान', 'हानि', 'जोखिम', 'विरोध', 'विपक्ष में', 'खिलाफ', 'असहमत', 'बदतर', 'प्रतिबंध', 'निषिद्ध', 'अस्वीकार', 'बुरा विचार'],
+  negatedAffirmatives: ['नहीं चाहिए', 'नहीं होना चाहिए', 'नहीं होनी चाहिए', 'नहीं होने चाहिए', 'अवश्य नहीं', 'समर्थन नहीं कर सकता', 'समर्थन नहीं कर सकती', 'सहमत नहीं हूँ'],
+  negativeMotionMarkers: ['नहीं होना चाहिए', 'नहीं होनी चाहिए', 'नहीं होने चाहिए', 'कभी नहीं', 'प्रतिबंधित होना चाहिए', 'प्रतिबंधित होनी चाहिए', 'प्रतिबंधित होने चाहिए', 'प्रतिबंध लगना चाहिए', 'निषिद्ध होना चाहिए', 'निषिद्ध होनी चाहिए', 'निषिद्ध होने चाहिए', 'सीमित होना चाहिए', 'सीमित होनी चाहिए', 'सीमित होने चाहिए', 'बचना चाहिए', 'लाभ से अधिक नुकसान'],
+  negativeMotionOppositionMarkers: ['प्रतिबंधित नहीं होना चाहिए', 'प्रतिबंधित नहीं होनी चाहिए', 'प्रतिबंधित नहीं होने चाहिए', 'निषिद्ध नहीं होना चाहिए', 'निषिद्ध नहीं होनी चाहिए', 'निषिद्ध नहीं होने चाहिए', 'सीमित नहीं होना चाहिए', 'सीमित नहीं होनी चाहिए', 'सीमित नहीं होने चाहिए', 'अनुमति होनी चाहिए', 'अनुमति मिलनी चाहिए', 'लाभ से अधिक नुकसान नहीं पहुँचाते', 'लाभ से अधिक नुकसान नहीं पहुंचाते', 'लाभ से अधिक नुकसान नहीं पहुँचाता', 'लाभ से अधिक नुकसान नहीं पहुंचाता', 'नुकसान से अधिक लाभ'],
 };
 
 const LANGUAGE_PROFILES: Record<SpeechLanguage, LanguageAnalysisProfile> = {
   en: ENGLISH_PROFILE,
   bn: BENGALI_PROFILE,
+  hi: HINDI_PROFILE,
 };
 
 function tokenize(text: string, locale: SpeechLanguage = 'en'): string[] {
@@ -112,7 +134,7 @@ function standardDeviation(values: number[]): number {
 }
 
 function keywordRoot(word: string, language: SpeechLanguage = 'en'): string {
-  if (language === 'bn') return word;
+  if (language !== 'en') return word;
   if (word.length > 5 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
   if (word.length > 6 && word.endsWith('ing')) return word.slice(0, -3);
   if (word.length > 5 && word.endsWith('ed')) return word.slice(0, -2);
@@ -143,11 +165,14 @@ export function analyzeText(transcript: string, topic: Topic, stance: Stance, au
   const affirmativeText = withoutPhrases(lower, profile.negatedAffirmatives, profile.locale);
   const positiveSignals = countPhrases(affirmativeText, profile.positiveSignals, profile.locale) + explicitSupport * 2;
   const motionIsNegative = countPhrases(topic.prompt, profile.negativeMotionMarkers, profile.locale) > 0;
-  // Generic positive/negative language maps reasonably to affirmative motions, but it
-  // becomes ambiguous for motions that already contain a negation. For those motions,
-  // the fast path only makes a decisive call from an explicit support/opposition statement.
-  const supportsMotion = motionIsNegative ? explicitSupport * 3 : positiveSignals;
-  const opposesMotion = motionIsNegative ? explicitOpposition * 3 : negativeSignals;
+  // Generic sentiment becomes ambiguous when the motion already contains a negation.
+  // For those motions, use explicit side statements or language-specific phrases that
+  // directly affirm/negate the ban, restriction, or other negative proposition.
+  const explicitNegativeMotionOpposition = countPhrases(lower, profile.negativeMotionOppositionMarkers, profile.locale);
+  const negativeMotionSupportText = withoutPhrases(lower, profile.negativeMotionOppositionMarkers, profile.locale);
+  const explicitNegativeMotionSupport = countPhrases(negativeMotionSupportText, profile.negativeMotionMarkers, profile.locale);
+  const supportsMotion = motionIsNegative ? explicitSupport * 3 + explicitNegativeMotionSupport * 2 : positiveSignals;
+  const opposesMotion = motionIsNegative ? explicitOpposition * 3 + explicitNegativeMotionOpposition * 2 : negativeSignals;
   const expectedSignals = stance === 'for' ? supportsMotion : opposesMotion;
   const contrarySignals = stance === 'for' ? opposesMotion : supportsMotion;
   const mixed = expectedSignals > 0 && contrarySignals > 0 && Math.abs(expectedSignals - contrarySignals) <= 1;
@@ -176,7 +201,11 @@ export function analyzeText(transcript: string, topic: Topic, stance: Stance, au
     topicKeywordCoverage: rootedTopicKeywords.size ? keywordHits / rootedTopicKeywords.size : 0,
     stanceSignal,
     stanceConfidence: stanceSignal === 'unclear' ? undefined : Math.min(0.95, 0.55 + Math.abs(expectedSignals - contrarySignals) * 0.08),
-    stanceEngine: language === 'bn' ? 'Fast Bengali phrase signals' : 'Fast phrase signals',
+    stanceEngine: language === 'bn'
+      ? 'Fast Bengali phrase signals'
+      : language === 'hi'
+        ? 'Fast Hindi phrase signals'
+        : 'Fast phrase signals',
     hasOpening: profile.openings.some((phrase) => countPhrases(openingSlice, [phrase], profile.locale) > 0),
     hasConclusion: profile.conclusions.some((phrase) => countPhrases(conclusionSlice, [phrase], profile.locale) > 0),
     sentenceCount: sentences.length || (words.length ? 1 : 0),

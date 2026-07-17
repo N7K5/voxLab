@@ -5,6 +5,7 @@ import {
   defaultSpokenCoachPreferences,
   languageLabel,
   normalizeSpokenCoachPreferences,
+  preferredVoiceForNetworkAccess,
   previewText,
   rankSpeechVoices,
   segmentCoachingSections,
@@ -16,6 +17,7 @@ import {
 import type { CoachFeedback, SpeechLanguage } from '../types';
 
 const LEGACY_VOICE_KEY = 'voxlab.coachVoice';
+const VOICE_START_TIMEOUT_MS = 12_000;
 
 type PlaybackMode = 'idle' | 'preview' | 'coaching';
 
@@ -41,9 +43,29 @@ function writePreferences(language: SpeechLanguage, preferences: SpokenCoachPref
 }
 
 function playbackErrorMessage(language: SpeechLanguage, code: string): string {
-  return language === 'bn'
-    ? `কণ্ঠস্বর চালু করা যায়নি (${code})। অন্য একটি কণ্ঠস্বর চেষ্টা করুন।`
-    : `The voice could not speak this coaching (${code}). Try another voice.`;
+  if (language === 'bn') {
+    return `কণ্ঠস্বর চালু করা যায়নি (${code})। অন্য একটি কণ্ঠস্বর চেষ্টা করুন।`;
+  }
+  if (language === 'hi') {
+    return `आवाज़ यह कोचिंग नहीं बोल सकी (${code})। कोई दूसरी आवाज़ आज़माएँ।`;
+  }
+  return `The voice could not speak this coaching (${code}). Try another voice.`;
+}
+
+function playbackStartTimeoutMessage(language: SpeechLanguage, networkVoice: boolean): string {
+  if (language === 'bn') {
+    return networkVoice
+      ? 'ব্রাউজারের নেটওয়ার্ক কণ্ঠস্বরটি চালু হয়নি। নেটওয়ার্ক সংযোগ পরীক্ষা করুন, অথবা একটি ব্রাউজার/সিস্টেম কণ্ঠস্বর বেছে নিন।'
+      : 'ব্রাউজার/সিস্টেম কণ্ঠস্বরটি চালু হয়নি। প্রিভিউ আবার চেষ্টা করুন অথবা অন্য কণ্ঠস্বর বেছে নিন।';
+  }
+  if (language === 'hi') {
+    return networkVoice
+      ? 'ब्राउज़र की नेटवर्क आवाज़ शुरू नहीं हुई। कनेक्शन जाँचें, या ब्राउज़र/सिस्टम आवाज़ चुनें।'
+      : 'ब्राउज़र/सिस्टम आवाज़ शुरू नहीं हुई। प्रीव्यू फिर चलाएँ या कोई दूसरी आवाज़ चुनें।';
+  }
+  return networkVoice
+    ? 'The browser network voice did not start. Check your connection, try Preview again, or select a browser/system voice.'
+    : 'The browser/system voice did not start. Try Preview again or select another voice.';
 }
 
 export function SpokenCoach({
@@ -63,6 +85,7 @@ export function SpokenCoach({
   const [error, setError] = useState<string | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const pauseTimerRef = useRef<number | null>(null);
+  const startTimerRef = useRef<number | null>(null);
   const sessionRef = useRef(0);
 
   const sections = useMemo(() => coachingSections(feedback, language), [feedback, language]);
@@ -83,7 +106,9 @@ export function SpokenCoach({
   const cancelPlayback = useCallback(() => {
     sessionRef.current += 1;
     if (pauseTimerRef.current !== null) window.clearTimeout(pauseTimerRef.current);
+    if (startTimerRef.current !== null) window.clearTimeout(startTimerRef.current);
     pauseTimerRef.current = null;
+    startTimerRef.current = null;
     utteranceRef.current = null;
     if (supported) window.speechSynthesis.cancel();
     setPlayback('idle');
@@ -92,18 +117,37 @@ export function SpokenCoach({
   useEffect(() => {
     if (!supported) return undefined;
     const synth = window.speechSynthesis;
-    const loadVoices = () => {
-      setAllVoices(synth.getVoices());
-      setVoicesLoaded(true);
+    let pollCount = 0;
+    const loadVoices = (settled = false) => {
+      const nextVoices = synth.getVoices();
+      setAllVoices(nextVoices);
+      if (nextVoices.length || settled) setVoicesLoaded(true);
+      return nextVoices.length;
     };
     loadVoices();
-    synth.addEventListener('voiceschanged', loadVoices);
+    const onVoicesChanged = () => loadVoices(true);
+    const onFocus = () => loadVoices();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadVoices();
+    };
+    const pollVoices = window.setInterval(() => {
+      pollCount += 1;
+      if (loadVoices(pollCount >= 8) > 0 || pollCount >= 8) window.clearInterval(pollVoices);
+    }, 500);
+    synth.addEventListener('voiceschanged', onVoicesChanged);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       sessionRef.current += 1;
       if (pauseTimerRef.current !== null) window.clearTimeout(pauseTimerRef.current);
+      if (startTimerRef.current !== null) window.clearTimeout(startTimerRef.current);
+      window.clearInterval(pollVoices);
       pauseTimerRef.current = null;
+      startTimerRef.current = null;
       utteranceRef.current = null;
-      synth.removeEventListener('voiceschanged', loadVoices);
+      synth.removeEventListener('voiceschanged', onVoicesChanged);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       synth.cancel();
     };
   }, [supported]);
@@ -129,6 +173,14 @@ export function SpokenCoach({
     });
   };
 
+  const changeNetworkAccess = (allowNetworkVoices: boolean) => {
+    const nextVoice = preferredVoiceForNetworkAccess(allVoices, language, allowNetworkVoices);
+    updatePreferences({
+      allowNetworkVoices,
+      ...(nextVoice ? { voiceUri: nextVoice.voiceURI } : {}),
+    });
+  };
+
   const beginPlayback = useCallback((nextSegments: readonly SpeechSegment[], mode: Exclude<PlaybackMode, 'idle'>) => {
     if (!supported || !selectedVoice || !nextSegments.length) return;
     cancelPlayback();
@@ -137,8 +189,14 @@ export function SpokenCoach({
     const synth = window.speechSynthesis;
     setPlayback(mode);
 
+    const clearStartTimer = () => {
+      if (startTimerRef.current !== null) window.clearTimeout(startTimerRef.current);
+      startTimerRef.current = null;
+    };
+
     const finish = () => {
       if (session !== sessionRef.current) return;
+      clearStartTimer();
       utteranceRef.current = null;
       pauseTimerRef.current = null;
       setPlayback('idle');
@@ -158,8 +216,13 @@ export function SpokenCoach({
       utterance.rate = preferences.rate;
       utterance.pitch = preferences.pitch;
       utterance.volume = 1;
+      utterance.onstart = () => {
+        if (session !== sessionRef.current || utteranceRef.current !== utterance) return;
+        clearStartTimer();
+      };
       utterance.onend = () => {
         if (session !== sessionRef.current || utteranceRef.current !== utterance) return;
+        clearStartTimer();
         utteranceRef.current = null;
         if (index === nextSegments.length - 1) {
           finish();
@@ -172,6 +235,7 @@ export function SpokenCoach({
       };
       utterance.onerror = (event) => {
         if (session !== sessionRef.current || utteranceRef.current !== utterance) return;
+        clearStartTimer();
         utteranceRef.current = null;
         if (pauseTimerRef.current !== null) window.clearTimeout(pauseTimerRef.current);
         pauseTimerRef.current = null;
@@ -179,11 +243,23 @@ export function SpokenCoach({
         setError(playbackErrorMessage(language, event.error || 'synthesis failed'));
       };
       utteranceRef.current = utterance;
+      startTimerRef.current = window.setTimeout(() => {
+        if (session !== sessionRef.current || utteranceRef.current !== utterance) return;
+        sessionRef.current += 1;
+        clearStartTimer();
+        if (pauseTimerRef.current !== null) window.clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = null;
+        utteranceRef.current = null;
+        synth.cancel();
+        setPlayback('idle');
+        setError(playbackStartTimeoutMessage(language, !selectedVoice.localService));
+      }, VOICE_START_TIMEOUT_MS);
       try {
         if (synth.paused) synth.resume();
         synth.speak(utterance);
       } catch (speakError) {
         if (session !== sessionRef.current) return;
+        clearStartTimer();
         utteranceRef.current = null;
         setPlayback('idle');
         setError(playbackErrorMessage(
@@ -222,7 +298,7 @@ export function SpokenCoach({
             >
               {voices.map((voice, index) => (
                 <option key={`${voice.voiceURI}-${voice.name}`} value={voice.voiceURI}>
-                  {index === 0 ? 'Recommended · ' : ''}{voice.name} · {voice.lang} · {voice.localService ? 'On-device' : 'Network'}
+                  {index === 0 ? 'Recommended · ' : ''}{voice.name} · {voice.lang} · {voice.localService ? 'Browser/system' : 'Browser network'}
                 </option>
               ))}
             </select>
@@ -232,7 +308,7 @@ export function SpokenCoach({
             {!voicesLoaded
               ? 'Looking for speech voices…'
               : hasNetworkAlternative && !preferences.allowNetworkVoices
-                ? `No on-device ${languageLabel(language)} voice was found. You can opt in to network voices below.`
+                ? `No browser/system ${languageLabel(language)} voice was found. You can opt in to network voices below.`
                 : `No ${languageLabel(language)} voice was reported by this browser.`}
           </p>
         )}
@@ -266,9 +342,15 @@ export function SpokenCoach({
           <input
             type="checkbox"
             checked={preferences.allowNetworkVoices}
-            onChange={(event) => updatePreferences({ allowNetworkVoices: event.target.checked })}
+            disabled={!preferences.allowNetworkVoices && voicesLoaded && !hasNetworkAlternative}
+            onChange={(event) => changeNetworkAccess(event.target.checked)}
           />
-          <span><strong>Allow network voices</strong><small>Off by default. Your browser’s provider may receive the coaching text.</small></span>
+          <span>
+            <strong>Use a browser network voice</strong>
+            <small>{hasNetworkAlternative
+              ? 'Switches to the best matching voice reported by this browser. The browser’s provider may receive the coaching text.'
+              : `No browser network voice for ${languageLabel(language)} is currently available.`}</small>
+          </span>
         </label>
 
         {error && <p className="spoken-coach-error" role="alert"><ShieldAlert size={13} /> {error}</p>}
@@ -291,10 +373,12 @@ export function SpokenCoach({
         </div>
       </div>
 
-      {(preferences.allowNetworkVoices || selectedIsNetworkVoice) && (
-        <span className="spoken-coach-privacy"><ShieldAlert size={13} /> Network voices may send coaching text to your browser’s speech provider.</span>
+      {selectedVoice && (
+        <span className="spoken-coach-privacy"><ShieldAlert size={13} /> {selectedIsNetworkVoice
+          ? 'This browser network voice may send coaching text to your browser’s speech provider.'
+          : 'The browser reports this as a local/system voice, but its speech engine may still use the network and receive the coaching text.'} Availability depends on the browser and device.</span>
       )}
-      <span className="spoken-coach-note"><Volume2 size={13} /> {selectedVoice ? (selectedIsNetworkVoice ? 'Uses your selected browser voice.' : 'Uses an installed local system voice.') : 'Speech starts only when a compatible voice is available.'} No generated coaching audio is saved.</span>
+      <span className="spoken-coach-note"><Volume2 size={13} /> {selectedVoice ? (selectedIsNetworkVoice ? 'Uses a browser-provided network voice.' : 'Uses a voice the browser reports as local/system; offline playback is not guaranteed.') : 'Speech starts only when a compatible voice is available.'} No generated coaching audio is saved.</span>
     </div>
   );
 }

@@ -118,8 +118,55 @@ export const BENGALI_TOPICS: Topic[] = [
   { id: 'bn-hard-12', language: 'bn', difficulty: 'hard', category: 'গোপনীয়তা', prompt: 'জাতীয় নিরাপত্তার নজরদারির প্রয়োজনের চেয়ে ডিজিটাল গোপনীয়তার অধিকার বেশি গুরুত্বপূর্ণ।' },
 ];
 
+export const HINDI_TOPICS: Topic[] = [
+  { id: 'hi-easy-01', language: 'hi', difficulty: 'easy', category: 'शिक्षा', prompt: 'सप्ताहांत पर विद्यार्थियों के लिए गृहकार्य वैकल्पिक होना चाहिए।' },
+  { id: 'hi-easy-02', language: 'hi', difficulty: 'easy', category: 'प्रौद्योगिकी', prompt: 'विद्यार्थियों को कक्षा में मोबाइल फोन इस्तेमाल करने की अनुमति होनी चाहिए।' },
+  { id: 'hi-easy-03', language: 'hi', difficulty: 'easy', category: 'पठन', prompt: 'ई-पुस्तकों की तुलना में मुद्रित पुस्तकें बेहतर हैं।' },
+  { id: 'hi-easy-04', language: 'hi', difficulty: 'easy', category: 'कार्यजीवन', prompt: 'कार्यालय में काम करने की तुलना में घर से काम करना बेहतर है।' },
+  { id: 'hi-easy-05', language: 'hi', difficulty: 'easy', category: 'कार्यजीवन', prompt: 'चार दिन का कार्य सप्ताह सामान्य नियम होना चाहिए।' },
+  { id: 'hi-easy-06', language: 'hi', difficulty: 'easy', category: 'जीवन कौशल', prompt: 'हर व्यक्ति को खाना बनाना सीखना चाहिए।' },
+  { id: 'hi-easy-07', language: 'hi', difficulty: 'easy', category: 'खेल', prompt: 'व्यक्तिगत खेलों की तुलना में टीम खेल अधिक उपयोगी कौशल सिखाते हैं।' },
+  { id: 'hi-easy-08', language: 'hi', difficulty: 'easy', category: 'उपहार', prompt: 'वस्तुओं की तुलना में अनुभव बेहतर जन्मदिन उपहार हैं।' },
+  { id: 'hi-easy-09', language: 'hi', difficulty: 'easy', category: 'विद्यालय', prompt: 'विद्यालय का दिन सुबह देर से शुरू होना चाहिए।' },
+  { id: 'hi-easy-10', language: 'hi', difficulty: 'easy', category: 'शहरी जीवन', prompt: 'हर मोहल्ले में पैदल दूरी पर एक सार्वजनिक पार्क होना चाहिए।' },
+  { id: 'hi-easy-11', language: 'hi', difficulty: 'easy', category: 'संबंध', prompt: 'बहुत से परिचितों की तुलना में कुछ करीबी मित्र होना बेहतर है।' },
+  { id: 'hi-easy-12', language: 'hi', difficulty: 'easy', category: 'यात्रा', prompt: 'पहले से अच्छी योजना बनाने पर छुट्टी अधिक आनंददायक होती है।' },
+
+  { id: 'hi-medium-01', language: 'hi', difficulty: 'medium', category: 'शिक्षा', prompt: 'सभी के लिए विश्वविद्यालय की शिक्षा निःशुल्क होनी चाहिए।' },
+  { id: 'hi-medium-02', language: 'hi', difficulty: 'medium', category: 'कृत्रिम बुद्धिमत्ता', prompt: 'कृत्रिम बुद्धिमत्ता से बनी हर सामग्री पर स्पष्ट लेबल होना चाहिए।' },
+  { id: 'hi-medium-03', language: 'hi', difficulty: 'medium', category: 'परिवहन', prompt: 'बड़े शहरों में सार्वजनिक परिवहन निःशुल्क होना चाहिए।' },
+  { id: 'hi-medium-04', language: 'hi', difficulty: 'medium', category: 'रोजगार', prompt: 'हर नौकरी के विज्ञापन में वेतन की सीमा बताना अनिवार्य होना चाहिए।' },
+  { id: 'hi-medium-05', language: 'hi', difficulty: 'medium', category: 'कार्यजीवन', prompt: 'कर्मचारियों को काम के समय के बाहर कार्यालय के संदेश अनदेखा करने का कानूनी अधिकार होना चाहिए।' },
+  { id: 'hi-medium-06', language: 'hi', difficulty: 'medium', category: 'सोशल मीडिया', prompt: 'सोशल मीडिया कंपनियों को हर उपयोगकर्ता की आयु की पुष्टि करनी चाहिए।' },
+  { id: 'hi-medium-07', language: 'hi', difficulty: 'medium', category: 'स्वास्थ्य', prompt: 'सरकार को बहुत अधिक चीनी वाले खाद्य पदार्थों पर अधिक कर लगाना चाहिए।' },
+  { id: 'hi-medium-08', language: 'hi', difficulty: 'medium', category: 'संस्कृति', prompt: 'संग्रहालयों को ऐतिहासिक वस्तुएँ उनके मूल देशों को लौटा देनी चाहिए।' },
+  { id: 'hi-medium-09', language: 'hi', difficulty: 'medium', category: 'शिक्षा', prompt: 'ऑनलाइन परीक्षा निगरानी सॉफ्टवेयर पर प्रतिबंध लगना चाहिए।' },
+  { id: 'hi-medium-10', language: 'hi', difficulty: 'medium', category: 'लोकतंत्र', prompt: 'योग्य नागरिकों के लिए मतदान करना अनिवार्य होना चाहिए।' },
+  { id: 'hi-medium-11', language: 'hi', difficulty: 'medium', category: 'उपभोक्ता अधिकार', prompt: 'निर्माताओं के लिए इलेक्ट्रॉनिक उपकरणों को आसानी से मरम्मत योग्य बनाना अनिवार्य होना चाहिए।' },
+  { id: 'hi-medium-12', language: 'hi', difficulty: 'medium', category: 'पर्यटन', prompt: 'लोकप्रिय पर्यटन स्थलों पर रोज़ आने वाले पर्यटकों की संख्या सीमित होनी चाहिए।' },
+
+  { id: 'hi-hard-01', language: 'hi', difficulty: 'hard', category: 'अर्थव्यवस्था', prompt: 'लक्षित कल्याण योजनाओं की तुलना में सार्वभौमिक मूल आय बेहतर है।' },
+  { id: 'hi-hard-02', language: 'hi', difficulty: 'hard', category: 'प्रौद्योगिकी', prompt: 'शक्तिशाली कृत्रिम बुद्धिमत्ता प्रणालियों को जारी करने से पहले सरकारी लाइसेंस अनिवार्य होना चाहिए।' },
+  { id: 'hi-hard-03', language: 'hi', difficulty: 'hard', category: 'जलवायु', prompt: 'देशों को उत्सर्जन कम करने की तुलना में जलवायु परिवर्तन के अनुकूलन को प्राथमिकता देनी चाहिए।' },
+  { id: 'hi-hard-04', language: 'hi', difficulty: 'hard', category: 'अभिव्यक्ति', prompt: 'उपयोगकर्ताओं द्वारा पोस्ट की गई हानिकारक गलत जानकारी के लिए ऑनलाइन प्लेटफ़ॉर्म कानूनी रूप से ज़िम्मेदार होने चाहिए।' },
+  { id: 'hi-hard-05', language: 'hi', difficulty: 'hard', category: 'नैतिकता', prompt: 'कड़े नियमन के अधीन मानव आनुवंशिक संवर्धन की अनुमति होनी चाहिए।' },
+  { id: 'hi-hard-06', language: 'hi', difficulty: 'hard', category: 'अंतरराष्ट्रीय संबंध', prompt: 'आर्थिक प्रतिबंध लाभ से अधिक नुकसान पहुँचाते हैं।' },
+  { id: 'hi-hard-07', language: 'hi', difficulty: 'hard', category: 'अभिव्यक्ति', prompt: 'स्वस्थ लोकतंत्र के लिए ऑनलाइन गुमनाम रहकर बोलने का सुरक्षित अधिकार ज़रूरी है।' },
+  { id: 'hi-hard-08', language: 'hi', difficulty: 'hard', category: 'सुरक्षा', prompt: 'पूर्णतः स्वायत्त हथियारों पर अंतरराष्ट्रीय कानून के तहत प्रतिबंध होना चाहिए।' },
+  { id: 'hi-hard-09', language: 'hi', difficulty: 'hard', category: 'जनस्वास्थ्य', prompt: 'घोषित वैश्विक स्वास्थ्य आपातकाल के दौरान दवाओं के पेटेंट संरक्षण को निलंबित कर देना चाहिए।' },
+  { id: 'hi-hard-10', language: 'hi', difficulty: 'hard', category: 'कर नीति', prompt: 'अर्जित आय पर कर की तुलना में विरासत में मिली संपत्ति पर कर अधिक न्यायसंगत है।' },
+  { id: 'hi-hard-11', language: 'hi', difficulty: 'hard', category: 'शासन', prompt: 'जटिल संकटों के दौरान स्वतंत्र विशेषज्ञ संस्थाओं के पास निर्वाचित नेताओं से अधिक नीतिगत अधिकार होना चाहिए।' },
+  { id: 'hi-hard-12', language: 'hi', difficulty: 'hard', category: 'गोपनीयता', prompt: 'डिजिटल गोपनीयता का अधिकार राष्ट्रीय सुरक्षा निगरानी की ज़रूरतों से अधिक महत्वपूर्ण होना चाहिए।' },
+];
+
+const TOPICS_BY_LANGUAGE: Record<SpeechLanguage, Topic[]> = {
+  en: TOPICS,
+  bn: BENGALI_TOPICS,
+  hi: HINDI_TOPICS,
+};
+
 export function randomTopic(difficulty: Difficulty, excludeId?: string, language: SpeechLanguage = 'en'): Topic {
-  const topics = language === 'bn' ? BENGALI_TOPICS : TOPICS;
+  const topics = TOPICS_BY_LANGUAGE[language];
   const pool = topics.filter((topic) => topic.difficulty === difficulty && topic.id !== excludeId);
   return pool[Math.floor(Math.random() * pool.length)] ?? topics[0];
 }

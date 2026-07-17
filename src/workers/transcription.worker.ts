@@ -144,7 +144,7 @@ self.onmessage = async (event: MessageEvent<TranscribeMessage>) => {
   try {
     if (!isSpeechLanguage(message.language)) throw new Error('The selected practice language is not supported.');
     if (message.language !== 'en' && isEnglishOnlyWhisper(message.model)) {
-      throw new Error('This Whisper model only understands English. Choose a multilingual model for Bengali.');
+      throw new Error('This Whisper model only understands English. Choose a multilingual model for the selected language.');
     }
     const speechPipeline = await loadTranscriber(message);
     post(message.id, { type: 'status', stage: 'transcription', message: 'Turning speech into text locally…' });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BENGALI_TOPICS, randomTopic, TOPICS } from './topics';
+import { BENGALI_TOPICS, HINDI_TOPICS, randomTopic, TOPICS } from './topics';
 
 describe('topic bank', () => {
   it('keeps a balanced pool for every difficulty', () => {
@@ -9,7 +9,7 @@ describe('topic bank', () => {
   });
 
   it('uses unique topic identifiers', () => {
-    const topics = [...TOPICS, ...BENGALI_TOPICS];
+    const topics = [...TOPICS, ...BENGALI_TOPICS, ...HINDI_TOPICS];
     expect(new Set(topics.map((topic) => topic.id)).size).toBe(topics.length);
   });
 
@@ -18,6 +18,14 @@ describe('topic bank', () => {
     expect(BENGALI_TOPICS.filter((topic) => topic.difficulty === 'medium')).toHaveLength(12);
     expect(BENGALI_TOPICS.filter((topic) => topic.difficulty === 'hard')).toHaveLength(12);
     expect(BENGALI_TOPICS.every((topic) => topic.language === 'bn')).toBe(true);
+  });
+
+  it('keeps a balanced Hindi pool for every difficulty', () => {
+    expect(HINDI_TOPICS.filter((topic) => topic.difficulty === 'easy')).toHaveLength(12);
+    expect(HINDI_TOPICS.filter((topic) => topic.difficulty === 'medium')).toHaveLength(12);
+    expect(HINDI_TOPICS.filter((topic) => topic.difficulty === 'hard')).toHaveLength(12);
+    expect(HINDI_TOPICS.every((topic) => topic.language === 'hi')).toBe(true);
+    expect(HINDI_TOPICS.every((topic) => /\p{Script=Devanagari}/u.test(topic.prompt))).toBe(true);
   });
 
   it('does not immediately return the excluded topic', () => {
@@ -30,6 +38,7 @@ describe('topic bank', () => {
   it('draws only from the requested language', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     expect(randomTopic('medium', undefined, 'bn').language).toBe('bn');
+    expect(randomTopic('medium', undefined, 'hi').language).toBe('hi');
     expect(randomTopic('medium', undefined, 'en').language).toBeUndefined();
     vi.restoreAllMocks();
   });

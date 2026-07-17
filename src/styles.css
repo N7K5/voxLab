@@ -145,6 +145,7 @@
 }
 
 * { box-sizing: border-box; }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 
 html { min-width: 320px; background: var(--bg); scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); color: var(--text); transition: background 240ms ease, color 240ms ease; }
@@ -655,6 +656,10 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .practice-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
 .practice-page-header h1 { font-size: clamp(2.5rem, 5vw, 4rem); }
 .practice-page-header p { margin-bottom: 0; }
+.practice-header-actions { display: flex; align-items: center; gap: 0.5rem; }
+.practice-language-menu { height: 30px; display: flex; align-items: center; gap: 0.32rem; padding: 0 0.3rem 0 0.55rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: var(--surface); }
+.practice-language-menu:focus-within { border-color: var(--mint); box-shadow: 0 0 0 3px rgba(142,230,183,0.1); }
+.practice-language-menu select { width: auto; height: 28px; padding: 0 1.25rem 0 0.15rem; border: 0; color: var(--muted); background: transparent; box-shadow: none; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
 .step-count { padding: 0.45rem 0.65rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 0.68rem; white-space: nowrap; }
 .setup-layout { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 1rem; align-items: start; }
 .setup-controls { display: grid; gap: 0.8rem; }
@@ -1055,6 +1060,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .audio-player__time { min-width: 29px; font-size: 0.61rem; }
 
   .practice-page-header { align-items: flex-start; }
+  .practice-header-actions { flex-direction: column-reverse; align-items: flex-end; }
   .practice-page-header h1 { font-size: 2.5rem; }
   .difficulty-grid { grid-template-columns: 1fr; }
   .difficulty-choice { min-height: 88px; }

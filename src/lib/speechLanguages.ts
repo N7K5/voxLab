@@ -9,10 +9,11 @@ export const SPEECH_LANGUAGES: ReadonlyArray<{
 }> = [
   { code: 'en', label: 'English', nativeLabel: 'English', whisperLanguage: 'english', locales: ['en'] },
   { code: 'bn', label: 'Bengali', nativeLabel: 'বাংলা', whisperLanguage: 'bengali', locales: ['bn'] },
+  { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी', whisperLanguage: 'hindi', locales: ['hi'] },
 ];
 
 export function isSpeechLanguage(value: unknown): value is SpeechLanguage {
-  return value === 'en' || value === 'bn';
+  return value === 'en' || value === 'bn' || value === 'hi';
 }
 
 export function speechLanguageDetails(language: SpeechLanguage) {
@@ -25,11 +26,12 @@ export function whisperLanguageName(language: SpeechLanguage): string {
 
 export function stanceLabel(stance: Stance, language: SpeechLanguage): string {
   if (language === 'bn') return stance === 'for' ? 'পক্ষে' : 'বিপক্ষে';
+  if (language === 'hi') return stance === 'for' ? 'पक्ष' : 'विपक्ष';
   return stance;
 }
 
 export function modelForSpeechLanguage(model: string, language: SpeechLanguage): string {
-  if (language === 'bn') {
+  if (language !== 'en') {
     if (model === 'onnx-community/whisper-tiny.en') return 'onnx-community/whisper-tiny';
     if (model === 'onnx-community/whisper-base.en') return 'onnx-community/whisper-base';
     if (model === 'distil-whisper/distil-small.en' || model === 'onnx-community/whisper-small.en') return 'onnx-community/whisper-small';

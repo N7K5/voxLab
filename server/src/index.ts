@@ -658,7 +658,7 @@ function validateTopic(value: unknown): Record<string, unknown> {
   if (!['easy', 'medium', 'hard'].includes(String(difficulty))) {
     throw new RequestValidationError('Topic difficulty is invalid.');
   }
-  if (value.language !== undefined && value.language !== 'en' && value.language !== 'bn') {
+  if (value.language !== undefined && value.language !== 'en' && value.language !== 'bn' && value.language !== 'hi') {
     throw new RequestValidationError('Topic language is invalid.');
   }
   return {
@@ -666,7 +666,7 @@ function validateTopic(value: unknown): Record<string, unknown> {
     prompt: boundedString(value.prompt, 'Topic prompt', 1_000),
     difficulty,
     category: boundedString(value.category, 'Topic category', 120),
-    ...(value.language === 'en' || value.language === 'bn' ? { language: value.language } : {}),
+    ...(value.language === 'en' || value.language === 'bn' || value.language === 'hi' ? { language: value.language } : {}),
     ...(typeof value.context === 'string' && value.context.trim()
       ? { context: boundedString(value.context, 'Topic context', 2_000) }
       : {}),
@@ -725,7 +725,7 @@ function validateSettings(value: unknown): Record<string, unknown> {
   if (value.whisperDevice !== 'auto' && value.whisperDevice !== 'webgpu' && value.whisperDevice !== 'wasm') {
     throw new RequestValidationError('Invalid speech-model device.');
   }
-  if (value.speechLanguage !== undefined && value.speechLanguage !== 'en' && value.speechLanguage !== 'bn') {
+  if (value.speechLanguage !== undefined && value.speechLanguage !== 'en' && value.speechLanguage !== 'bn' && value.speechLanguage !== 'hi') {
     throw new RequestValidationError('Invalid practice language.');
   }
   if (value.stanceAnalysis !== undefined && value.stanceAnalysis !== 'signals' && value.stanceAnalysis !== 'semantic') {
@@ -749,7 +749,7 @@ function validateSettings(value: unknown): Record<string, unknown> {
     whisperModel: boundedString(value.whisperModel, 'Speech model', 200),
     whisperDevice: value.whisperDevice,
     speechLanguage: value.speechLanguage ?? 'en',
-    stanceAnalysis: value.speechLanguage === 'bn' ? 'signals' : value.stanceAnalysis ?? 'semantic',
+    stanceAnalysis: value.stanceAnalysis ?? 'semantic',
     saveRecordings: value.saveRecordings,
   };
 }

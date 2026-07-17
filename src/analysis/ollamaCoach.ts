@@ -76,9 +76,7 @@ function buildPrompt(input: {
   text: TextMetrics;
   scores: ScoreBreakdown;
 }): string {
-  const languageInstruction = input.topic.language === 'bn'
-    ? 'Write every natural-language JSON value in Bengali. Keep each "original" quotation copied exactly from the Bengali transcript; do not translate that quotation.'
-    : 'Write every natural-language JSON value in English.';
+  const languageInstruction = coachingLanguageInstruction(input.topic.language);
   return `You are a rigorous but encouraging public-speaking coach.
 The speaker had to argue ${input.stance.toUpperCase()} this motion: "${input.topic.prompt}"
 
@@ -101,8 +99,40 @@ function stringField(value: unknown, message: string): string {
   return value.trim();
 }
 
-function containsBengali(value: string): boolean {
-  return (value.match(/[\u0980-\u09ff]/gu)?.length ?? 0) >= 3;
+function coachingLanguageInstruction(language: Topic['language']): string {
+  if (language === 'bn') {
+    return 'Write every natural-language JSON value in Bengali. Keep each "original" quotation copied exactly from the Bengali transcript; do not translate that quotation.';
+  }
+  if (language === 'hi') {
+    return 'Write every natural-language JSON value in Hindi using Devanagari script. Keep each "original" quotation copied exactly from the Hindi transcript; do not translate that quotation.';
+  }
+  return 'Write every natural-language JSON value in English.';
+}
+
+function containsRequestedScript(value: string, language: Topic['language']): boolean {
+  const script = language === 'bn'
+    ? /\p{Script=Bengali}/u
+    : language === 'hi'
+      ? /\p{Script=Devanagari}/u
+      : null;
+  if (script === null) return true;
+  const letters = [...value].filter((character) => /\p{L}/u.test(character));
+  const targetLetters = letters.filter((character) => script.test(character)).length;
+  return targetLetters >= 3 && targetLetters / Math.max(1, letters.length) >= 0.35;
+}
+
+function languageName(language: Topic['language']): string {
+  if (language === 'bn') return 'Bengali';
+  if (language === 'hi') return 'Hindi';
+  return 'English';
+}
+
+function normalizedComparableText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+}
+
+function lexicalComparableText(value: string): string {
+  return (value.toLocaleLowerCase().match(/[\p{L}\p{M}\p{N}]+/gu) ?? []).join(' ');
 }
 
 function parseContent(content: string, model: string, transcript: string, language: Topic['language']): CoachFeedback {
@@ -137,16 +167,25 @@ function parseContent(content: string, model: string, transcript: string, langua
   if (!Array.isArray(parsed.reframes) || parsed.reframes.length < 1) {
     throw new Error('Ollama did not return a usable sentence reframe.');
   }
-  const normalizedTranscript = transcript.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  const seenOriginals = new Set<string>();
   const reframes = parsed.reframes.slice(0, 2).map((item) => {
     const original = stringField(item?.original, 'Ollama returned an incomplete sentence reframe.');
-    if (!normalizedTranscript.includes(original.replace(/\s+/g, ' ').trim().toLocaleLowerCase())) {
+    const normalizedOriginal = normalizedComparableText(original);
+    if (!transcript.includes(original)) {
       throw new Error('Ollama returned a quotation that was not in the transcript.');
+    }
+    if (seenOriginals.has(normalizedOriginal)) {
+      throw new Error('Ollama returned duplicate quotations for its sentence reframes.');
+    }
+    seenOriginals.add(normalizedOriginal);
+    const revised = stringField(item?.revised, 'Ollama returned an incomplete sentence reframe.');
+    if (lexicalComparableText(revised) === lexicalComparableText(original)) {
+      throw new Error('Ollama returned a sentence reframe that did not change the original wording.');
     }
     return {
       original,
       issue: stringField(item?.issue, 'Ollama returned an incomplete sentence reframe.'),
-      revised: stringField(item?.revised, 'Ollama returned an incomplete sentence reframe.'),
+      revised,
       principle: stringField(item?.principle, 'Ollama returned an incomplete sentence reframe.'),
     };
   });
@@ -160,7 +199,7 @@ function parseContent(content: string, model: string, transcript: string, langua
     strongestCounterargument: stringField(strategy.strongestCounterargument, 'Ollama returned an incomplete topic strategy.'),
     nextOutline: strategy.nextOutline.slice(0, 4).map((value) => stringField(value, 'Ollama returned an incomplete topic strategy.')),
   };
-  if (language === 'bn') {
+  if (language === 'bn' || language === 'hi') {
     const generatedFields = [
       summary,
       ...strengths,
@@ -172,8 +211,8 @@ function parseContent(content: string, model: string, transcript: string, langua
       topicStrategy.strongestCounterargument,
       ...topicStrategy.nextOutline,
     ];
-    if (generatedFields.some((field) => !containsBengali(field))) {
-      throw new Error('Ollama did not return the requested Bengali coaching, so browser coaching was used.');
+    if (generatedFields.some((field) => !containsRequestedScript(field, language))) {
+      throw new Error(`Ollama did not return the requested ${languageName(language)} coaching, so browser coaching was used.`);
     }
   }
   return {
@@ -236,4 +275,4 @@ export async function requestOllamaFeedback(
   return parseContent(result.message.content, settings.ollamaModel, input.transcript, input.topic.language);
 }
 
-export const ollamaCoachTestHelpers = { parseContent };
+export const ollamaCoachTestHelpers = { parseContent, coachingLanguageInstruction };

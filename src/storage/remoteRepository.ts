@@ -149,7 +149,6 @@ export class RemoteRepository implements AppRepository {
     const merged = { ...defaults, ...(stored ?? {}) };
     merged.speechLanguage = isSpeechLanguage(merged.speechLanguage) ? merged.speechLanguage : 'en';
     merged.whisperModel = modelForSpeechLanguage(merged.whisperModel, merged.speechLanguage);
-    if (merged.speechLanguage === 'bn') merged.stanceAnalysis = 'signals';
     return merged;
   }
 

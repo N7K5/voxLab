@@ -4,7 +4,7 @@ export type StanceMode = 'choose' | 'game';
 export type PracticeMode = 'solo' | 'duel';
 export type AiProvider = 'browser' | 'ollama';
 export type StorageMode = 'auto' | 'browser' | 'database';
-export type SpeechLanguage = 'en' | 'bn';
+export type SpeechLanguage = 'en' | 'bn' | 'hi';
 
 export interface Topic {
   id: string;

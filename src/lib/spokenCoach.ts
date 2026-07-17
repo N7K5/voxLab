@@ -28,18 +28,22 @@ const QUALITY_HINTS: Array<[RegExp, number]> = [
   [/\bhigh quality\b/i, 3_000],
 ];
 
-export function speechLocale(language: SpeechLanguage): 'en-US' | 'bn-BD' {
-  return language === 'bn' ? 'bn-BD' : 'en-US';
+export function speechLocale(language: SpeechLanguage): 'en-US' | 'bn-BD' | 'hi-IN' {
+  if (language === 'bn') return 'bn-BD';
+  if (language === 'hi') return 'hi-IN';
+  return 'en-US';
 }
 
 export function languageLabel(language: SpeechLanguage): string {
-  return language === 'bn' ? 'Bangla' : 'English';
+  if (language === 'bn') return 'Bangla';
+  if (language === 'hi') return 'Hindi';
+  return 'English';
 }
 
 export function defaultSpokenCoachPreferences(language: SpeechLanguage): SpokenCoachPreferences {
   return {
     voiceUri: '',
-    rate: language === 'bn' ? 0.9 : 0.95,
+    rate: language === 'en' ? 0.95 : 0.9,
     pitch: 1,
     allowNetworkVoices: false,
   };
@@ -117,10 +121,21 @@ export function rankSpeechVoices<T extends SpeechVoiceLike>(
     .map(({ voice }) => voice);
 }
 
+export function preferredVoiceForNetworkAccess<T extends SpeechVoiceLike>(
+  voices: readonly T[],
+  language: SpeechLanguage,
+  allowNetworkVoices: boolean,
+): T | undefined {
+  const ranked = rankSpeechVoices(voices, language, '', allowNetworkVoices);
+  return allowNetworkVoices
+    ? ranked.find((voice) => !voice.localService)
+    : ranked[0];
+}
+
 function terminal(text: string, language: SpeechLanguage): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (!cleaned || /[.!?।]$/u.test(cleaned)) return cleaned;
-  return `${cleaned}${language === 'bn' ? '।' : '.'}`;
+  return `${cleaned}${language === 'en' ? '.' : '।'}`;
 }
 
 export function coachingSections(feedback: CoachFeedback, language: SpeechLanguage): string[] {
@@ -129,42 +144,48 @@ export function coachingSections(feedback: CoachFeedback, language: SpeechLangua
   const sections = [terminal(feedback.summary, language)];
 
   if (weakness) {
-    sections.push(terminal(
-      language === 'bn'
-        ? `আপনার প্রথম অগ্রাধিকার: ${weakness.title}`
-        : `Your first priority: ${weakness.title}`,
-      language,
-    ));
-    sections.push(terminal(
-      language === 'bn'
-        ? `কেন এটি গুরুত্বপূর্ণ: ${weakness.whyItMatters}`
-        : `Why this matters: ${weakness.whyItMatters}`,
-      language,
-    ));
-    sections.push(terminal(
-      language === 'bn'
-        ? `পরেরবার চেষ্টা করুন: ${weakness.howToImprove}`
-        : `Next time, try this: ${weakness.howToImprove}`,
-      language,
-    ));
+    const firstPriority = language === 'bn'
+      ? `আপনার প্রথম অগ্রাধিকার: ${weakness.title}`
+      : language === 'hi'
+        ? `आपकी पहली प्राथमिकता: ${weakness.title}`
+        : `Your first priority: ${weakness.title}`;
+    const whyItMatters = language === 'bn'
+      ? `কেন এটি গুরুত্বপূর্ণ: ${weakness.whyItMatters}`
+      : language === 'hi'
+        ? `यह क्यों महत्वपूर्ण है: ${weakness.whyItMatters}`
+        : `Why this matters: ${weakness.whyItMatters}`;
+    const nextTime = language === 'bn'
+      ? `পরেরবার চেষ্টা করুন: ${weakness.howToImprove}`
+      : language === 'hi'
+        ? `अगली बार यह आज़माएँ: ${weakness.howToImprove}`
+        : `Next time, try this: ${weakness.howToImprove}`;
+    sections.push(terminal(firstPriority, language));
+    sections.push(terminal(whyItMatters, language));
+    sections.push(terminal(nextTime, language));
   } else if (improvement) {
     sections.push(terminal(
       language === 'bn'
         ? `আপনার প্রথম অগ্রাধিকার: ${improvement.title}`
-        : `Your first priority: ${improvement.title}`,
+        : language === 'hi'
+          ? `आपकी पहली प्राथमिकता: ${improvement.title}`
+          : `Your first priority: ${improvement.title}`,
       language,
     ));
     sections.push(terminal(improvement.detail, language));
     sections.push(terminal(
       language === 'bn'
         ? `এবার এটি চেষ্টা করুন: ${improvement.drill}`
-        : `Try this: ${improvement.drill}`,
+        : language === 'hi'
+          ? `अब यह आज़माएँ: ${improvement.drill}`
+          : `Try this: ${improvement.drill}`,
       language,
     ));
   } else {
     sections.push(language === 'bn'
       ? 'একটি দুর্বলতা বেছে নিন, তারপর একটি পরিবর্তনসহ বক্তব্যটি আবার বলুন।'
-      : 'Choose one measured weakness, then repeat the speech with one deliberate change.');
+      : language === 'hi'
+        ? 'एक मापी गई कमज़ोरी चुनें, फिर एक जानबूझकर बदलाव के साथ भाषण दोहराएँ।'
+        : 'Choose one measured weakness, then repeat the speech with one deliberate change.');
   }
 
   return sections.filter(Boolean);
@@ -222,7 +243,11 @@ export function segmentCoachingSections(
 }
 
 export function previewText(language: SpeechLanguage): string {
-  return language === 'bn'
-    ? 'এটি আপনার কোচিং কণ্ঠস্বর। স্পষ্টভাবে বলুন, তারপর মূল কথার পরে একটু বিরতি দিন।'
-    : 'This is your coaching voice. Speak clearly, then let the key point breathe.';
+  if (language === 'bn') {
+    return 'এটি আপনার কোচিং কণ্ঠস্বর। স্পষ্টভাবে বলুন, তারপর মূল কথার পরে একটু বিরতি দিন।';
+  }
+  if (language === 'hi') {
+    return 'यह आपकी कोचिंग की आवाज़ है। साफ़ बोलें, फिर मुख्य बात के बाद थोड़ा रुकें।';
+  }
+  return 'This is your coaching voice. Speak clearly, then let the key point breathe.';
 }

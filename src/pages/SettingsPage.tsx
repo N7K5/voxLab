@@ -25,9 +25,9 @@ const speechModelDetails: Record<string, { tier: string; detail: string; heavy?:
   'onnx-community/whisper-base.en': { tier: 'Balanced', detail: 'Better recognition with a moderate first-time download.' },
   'distil-whisper/distil-small.en': { tier: 'Accurate', detail: 'A larger distilled English model; WebGPU recommended.', heavy: true },
   'onnx-community/whisper-small.en': { tier: 'Maximum', detail: 'Highest browser tier; roughly 600 MB of model weights on WebGPU plus substantial runtime memory.', heavy: true },
-  'onnx-community/whisper-tiny': { tier: 'Fast multilingual', detail: 'Smallest Bengali-capable model; quickest, but less accurate with accents and noisy rooms.' },
-  'onnx-community/whisper-base': { tier: 'Balanced multilingual', detail: 'A moderate Bengali-capable model for everyday devices.' },
-  'onnx-community/whisper-small': { tier: 'Accurate multilingual', detail: 'Best Bengali browser tier; roughly 250 MB with quantized browser CPU weights.', heavy: true },
+  'onnx-community/whisper-tiny': { tier: 'Fast multilingual', detail: 'Smallest Bengali/Hindi-capable model; quickest, but less accurate with accents and noisy rooms.' },
+  'onnx-community/whisper-base': { tier: 'Balanced multilingual', detail: 'A moderate Bengali/Hindi-capable model for everyday devices.' },
+  'onnx-community/whisper-small': { tier: 'Accurate multilingual', detail: 'Best multilingual browser tier; roughly 250 MB with quantized browser CPU weights.', heavy: true },
 };
 
 const speechModels: Record<SpeechLanguage, Array<{ value: string; label: string }>> = {
@@ -38,6 +38,11 @@ const speechModels: Record<SpeechLanguage, Array<{ value: string; label: string 
     { value: 'onnx-community/whisper-small.en', label: 'Maximum · Whisper Small English' },
   ],
   bn: [
+    { value: 'onnx-community/whisper-tiny', label: 'Fast · Whisper Tiny Multilingual' },
+    { value: 'onnx-community/whisper-base', label: 'Balanced · Whisper Base Multilingual' },
+    { value: 'onnx-community/whisper-small', label: 'Accurate · Whisper Small Multilingual' },
+  ],
+  hi: [
     { value: 'onnx-community/whisper-tiny', label: 'Fast · Whisper Tiny Multilingual' },
     { value: 'onnx-community/whisper-base', label: 'Balanced · Whisper Base Multilingual' },
     { value: 'onnx-community/whisper-small', label: 'Accurate · Whisper Small Multilingual' },
@@ -95,7 +100,6 @@ export function SettingsPage() {
       ...current,
       speechLanguage,
       whisperModel: modelForSpeechLanguage(current.whisperModel, speechLanguage),
-      stanceAnalysis: speechLanguage === 'bn' ? 'signals' : current.stanceAnalysis,
     } : current);
     setSaved(false);
   };
@@ -128,12 +132,12 @@ export function SettingsPage() {
             <div className="provider-grid">
               <button type="button" className={`provider-card${draft.aiProvider === 'browser' ? ' selected' : ''}`} onClick={() => chooseProvider('browser')}>
                 <span className="provider-icon"><Cpu size={21} /></span>
-                <span><strong>Browser coach</strong><small>Fast, deterministic feedback with no LLM request.</small></span>
+                <span><strong>Browser coach</strong><small>Fast, evidence-specific templates with no generative LLM.</small></span>
                 {draft.aiProvider === 'browser' && <CheckCircle2 size={18} />}
               </button>
               <button type="button" className={`provider-card${draft.aiProvider === 'ollama' ? ' selected' : ''}`} onClick={() => chooseProvider('ollama')}>
                 <span className="provider-icon"><Bot size={21} /></span>
-                <span><strong>Ollama coach</strong><small>Use a local model for richer, personalized suggestions.</small></span>
+                <span><strong>Ollama coach</strong><small>Model-generated summaries, sentence rewrites, and personalized suggestions.</small></span>
                 {draft.aiProvider === 'ollama' && <CheckCircle2 size={18} />}
               </button>
             </div>
@@ -159,16 +163,16 @@ export function SettingsPage() {
           <section className="settings-card">
             <div className="settings-card-heading"><span className="settings-icon"><Languages size={19} /></span><div><h2>Practice language and transcription</h2><p>Choose the language you will speak. The first run downloads a matching Whisper model and caches it in your browser.</p></div></div>
             <div className="settings-fields two-column">
-              <label><span>Default practice language</span><select value={draft.speechLanguage} onChange={(event) => chooseSpeechLanguage(event.target.value as SpeechLanguage)}><option value="en">English</option><option value="bn">বাংলা · Bengali</option></select></label>
+              <label><span>Default practice language</span><select value={draft.speechLanguage} onChange={(event) => chooseSpeechLanguage(event.target.value as SpeechLanguage)}><option value="en">English</option><option value="bn">বাংলা · Bengali</option><option value="hi">हिन्दी · Hindi</option></select></label>
               <label><span>Whisper model</span><select value={draft.whisperModel} onChange={(event) => update('whisperModel', event.target.value)}>{speechModels[draft.speechLanguage].map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}</select></label>
               <label><span>Compute device</span><select value={draft.whisperDevice} onChange={(event) => update('whisperDevice', event.target.value as UserSettings['whisperDevice'])}><option value="auto">Auto detect</option><option value="webgpu">WebGPU</option><option value="wasm">WASM / CPU</option></select></label>
             </div>
             {selectedSpeechModel && <div className={`speech-model-note${selectedSpeechModel.heavy ? ' heavy' : ''}`}><Cpu size={15} /><div><strong>{selectedSpeechModel.tier} local model</strong><span>{selectedSpeechModel.detail} Models download on first use and are cached when the browser allows it.</span></div></div>}
             <div className="stance-analysis-setting">
               <div><strong>Argument stance checker</strong><span>Checks whether the transcript actually supports the assigned side.</span></div>
-              <select value={draft.speechLanguage === 'bn' ? 'signals' : draft.stanceAnalysis} disabled={draft.speechLanguage === 'bn'} onChange={(event) => update('stanceAnalysis', event.target.value as UserSettings['stanceAnalysis'])}><option value="semantic">Semantic local model · recommended</option><option value="signals">Fast phrase signals · no extra model</option></select>
+              <select value={draft.stanceAnalysis} onChange={(event) => update('stanceAnalysis', event.target.value as UserSettings['stanceAnalysis'])}><option value="semantic">Multilingual semantic model · recommended</option><option value="signals">Fast phrase signals · no extra model</option></select>
             </div>
-            <p className="settings-note">{draft.speechLanguage === 'bn' ? 'Bengali currently uses local Bengali phrase and topic signals for stance. Explicitly saying পক্ষে or বিপক্ষে can improve alignment detection; the English semantic model is not run on Bengali.' : 'The semantic option uses an English NLI model in this browser (about 100 MB on first use). It is much better at opposite-side detection, but mixed rebuttals, sarcasm, and transcription mistakes can still confuse it.'}</p>
+            <p className="settings-note">The semantic option uses a multilingual NLI model in this browser (about 360 MB on first use) for English, Bengali, and Hindi. It is more capable than phrase matching, but mixed rebuttals, sarcasm, and transcription mistakes can still confuse it.</p>
           </section>
 
           <section className="settings-card">

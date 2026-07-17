@@ -25,14 +25,16 @@ import {
   Volume2,
   WandSparkles,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { MetricBar } from '../components/MetricBar';
 import { ScoreRing } from '../components/ScoreRing';
 import { SpokenCoach } from '../components/SpokenCoach';
+import { requestOllamaFeedback } from '../analysis/ollamaCoach';
+import { browserHistorySummary } from '../analysis/scoring';
 import { useApp } from '../context/AppContext';
-import type { PracticeAttempt, ScoreBreakdown } from '../types';
+import type { PracticeAttempt, ScoreBreakdown, SentenceReframe, SpeechLanguage } from '../types';
 
 const scoreLabels: Array<{ key: keyof ScoreBreakdown; label: string }> = [
   { key: 'pacing', label: 'Pacing' },
@@ -54,30 +56,99 @@ function scoreBand(score: number): string {
   return 'Developing';
 }
 
+function stanceAnalysisNote(language: SpeechLanguage, engine?: string): string {
+  const normalizedEngine = engine?.toLocaleLowerCase() ?? '';
+  const semantic = normalizedEngine.includes('local semantic nli')
+    || (normalizedEngine.includes('semantic') && !normalizedEngine.includes('inconclusive'));
+
+  if (semantic) {
+    if (language === 'bn') {
+      return 'The multilingual semantic model compares this Bengali transcript with the motion. It can still miss mixed rebuttals, sarcasm, or transcription errors; stating পক্ষে or বিপক্ষে makes the position clearer.';
+    }
+    if (language === 'hi') {
+      return 'The multilingual semantic model compares this Hindi transcript with the motion. It can still miss mixed rebuttals, sarcasm, or transcription errors; stating पक्ष or विपक्ष makes the position clearer.';
+    }
+    return 'The multilingual semantic model compares the transcript with the motion, but can still miss mixed rebuttals, sarcasm, or transcription errors.';
+  }
+
+  if (language === 'bn') {
+    return 'Fast Bengali phrase and topic signals were used. Explicitly stating পক্ষে or বিপক্ষে gives this lightweight checker stronger evidence.';
+  }
+  if (language === 'hi') {
+    return 'Fast Hindi phrase and topic signals were used. Explicitly stating पक्ष or विपक्ष gives this lightweight checker stronger evidence.';
+  }
+  return 'Fast English phrase and topic signals were used. State the assigned side explicitly when the position could otherwise sound mixed.';
+}
+
+const LEGACY_STOCK_REFRAME_MARKERS = [
+  'the thought can be made more useful by explicitly connecting it to the motion',
+  'do not make the listener infer relevance',
+  'কথাটির ফলাফল বিষয়ের সঙ্গে আরও সরাসরি যুক্ত করা যায়',
+  'প্রাসঙ্গিকতা শ্রোতাকে অনুমান করতে দেবেন না',
+];
+
+function visibleReframes(provider: 'browser' | 'ollama', reframes?: SentenceReframe[]): SentenceReframe[] {
+  if (provider === 'ollama') return reframes ?? [];
+  const seen = new Set<string>();
+  return (reframes ?? []).filter((item) => {
+    const original = item.original.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+    if (!original || seen.has(original)) return false;
+    seen.add(original);
+    const explanation = `${item.issue} ${item.principle}`.toLocaleLowerCase();
+    return !LEGACY_STOCK_REFRAME_MARKERS.some((marker) => explanation.includes(marker));
+  });
+}
+
 export function ResultsPage() {
   const { id = '' } = useParams();
-  const { attempts, getAttempt, getRecording } = useApp();
+  const { attempts, config, settings, getAttempt, getRecording, saveAttempt } = useApp();
   const [attempt, setAttempt] = useState<PracticeAttempt | null | undefined>(() => attempts.find((item) => item.id === id));
+  const [loadedAttemptId, setLoadedAttemptId] = useState<string | null>(() => attempts.some((item) => item.id === id) ? id : null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [upgradingCoaching, setUpgradingCoaching] = useState(false);
+  const [coachingUpgradeError, setCoachingUpgradeError] = useState<string | null>(null);
+  const activeAttemptIdRef = useRef(id);
+  activeAttemptIdRef.current = id;
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
+    setLoadedAttemptId(null);
+    setAttempt(undefined);
+    setAudioUrl(null);
+    setError(null);
+    setRecordingError(null);
+    setCoachingUpgradeError(null);
+    setUpgradingCoaching(false);
     void (async () => {
       try {
         const found = await getAttempt(id);
         if (cancelled) return;
         setAttempt(found);
+        setLoadedAttemptId(id);
         if (found?.hasRecording) {
-          const recording = await getRecording(id);
-          if (recording && !cancelled) {
-            objectUrl = URL.createObjectURL(recording);
-            setAudioUrl(objectUrl);
+          try {
+            const recording = await getRecording(id);
+            if (recording && !cancelled) {
+              objectUrl = URL.createObjectURL(recording);
+              setAudioUrl(objectUrl);
+            } else if (!recording && !cancelled) {
+              setRecordingError('The saved recording is unavailable, but the analysis is still intact.');
+            }
+          } catch (recordingLoadError) {
+            if (!cancelled) {
+              const detail = recordingLoadError instanceof Error ? ` ${recordingLoadError.message}` : '';
+              setRecordingError(`The saved recording could not be loaded, but the analysis is still intact.${detail}`);
+            }
           }
         }
       } catch (loadError) {
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Could not load this analysis.');
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'Could not load this analysis.');
+          setLoadedAttemptId(id);
+        }
       }
     })();
     return () => {
@@ -91,13 +162,51 @@ export function ResultsPage() {
     timeStyle: 'short',
   }).format(new Date(attempt.createdAt)) : '', [attempt]);
 
-  if (attempt === undefined && !error) return <div className="page-loading"><LoaderCircle className="spin" size={25} /> Loading your analysis…</div>;
+  if (loadedAttemptId !== id || (attempt === undefined && !error)) return <div className="page-loading"><LoaderCircle className="spin" size={25} /> Loading your analysis…</div>;
   if (!attempt || error) return <div className="page error-page"><TriangleAlert size={28} /><h1>Analysis not found</h1><p>{error ?? 'This practice may have been deleted.'}</p><Link className="button secondary" to="/history"><ArrowLeft size={16} /> Back to history</Link></div>;
 
   const { report } = attempt;
+  const language = attempt.topic.language ?? report.feedback.language ?? report.text.language ?? 'en';
   const duel = report.duel;
   const providerLabel = report.feedback.provider === 'ollama' ? `Ollama · ${report.feedback.model ?? 'local model'}` : 'Browser coach';
+  const summary = report.feedback.provider === 'ollama'
+    ? report.feedback.summary
+    : browserHistorySummary(report.scores, report.audio, report.text, language);
+  const reframes = visibleReframes(report.feedback.provider, report.feedback.reframes);
   const scrollToRecording = () => document.getElementById('recording')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const canUpgradeCoaching = report.feedback.provider === 'browser'
+    && settings?.aiProvider === 'ollama'
+    && Boolean(config);
+
+  const generateRicherCoaching = async () => {
+    if (!settings || !config || report.feedback.provider !== 'browser' || upgradingCoaching) return;
+    const upgradingAttemptId = attempt.id;
+    setUpgradingCoaching(true);
+    setCoachingUpgradeError(null);
+    try {
+      const feedback = await requestOllamaFeedback({
+        topic: attempt.topic,
+        stance: attempt.stance,
+        transcript: attempt.transcript,
+        audio: report.audio,
+        text: report.text,
+        scores: report.scores,
+      }, settings, config.storage.apiBaseUrl);
+      const upgradedAttempt: PracticeAttempt = {
+        ...attempt,
+        recording: undefined,
+        report: { ...report, feedback },
+      };
+      await saveAttempt(upgradedAttempt);
+      if (activeAttemptIdRef.current === upgradingAttemptId) setAttempt(upgradedAttempt);
+    } catch (upgradeError) {
+      if (activeAttemptIdRef.current === upgradingAttemptId) {
+        setCoachingUpgradeError(upgradeError instanceof Error ? upgradeError.message : 'Could not generate richer coaching.');
+      }
+    } finally {
+      if (activeAttemptIdRef.current === upgradingAttemptId) setUpgradingCoaching(false);
+    }
+  };
 
   return (
     <div className="page results-page">
@@ -107,14 +216,25 @@ export function ResultsPage() {
         <div className="results-score"><ScoreRing score={report.scores.overall} /><span className="score-band">{scoreBand(report.scores.overall)}</span><span className="provider-badge"><Sparkles size={13} /> {providerLabel}</span></div>
         <div className="results-title">
           <div className="attempt-meta"><span className={`difficulty-pill ${attempt.topic.difficulty}`}>{attempt.topic.difficulty}</span><span className={`stance-pill ${attempt.stance}`}>{attempt.stance}</span><span><Clock3 size={12} /> {Math.round(attempt.durationSeconds)} sec</span></div>
-          <h1>{attempt.topic.prompt}</h1>
-          <p>{report.feedback.summary}</p>
-          <div className="results-actions"><Link className="button primary" to="/practice"><Mic2 size={17} /> Practice another</Link>{audioUrl && <button className="button secondary" type="button" onClick={scrollToRecording}><Headphones size={17} /> Listen back</button>}</div>
+          <h1 lang={language}>{attempt.topic.prompt}</h1>
+          <p lang={language}>{summary}</p>
+          <div className="results-actions">
+            <Link className="button primary" to="/practice"><Mic2 size={17} /> Practice another</Link>
+            {audioUrl && <button className="button secondary" type="button" onClick={scrollToRecording}><Headphones size={17} /> Listen back</button>}
+            {canUpgradeCoaching && (
+              <button className="button secondary" type="button" disabled={upgradingCoaching} onClick={() => void generateRicherCoaching()}>
+                {upgradingCoaching ? <LoaderCircle className="spin" size={17} /> : <WandSparkles size={17} />}
+                {upgradingCoaching ? 'Generating richer coaching…' : 'Generate richer coaching with Ollama'}
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
       {report.transcriptionWarning && <div className="analysis-warning"><TriangleAlert size={17} /><span>{report.transcriptionWarning}</span></div>}
       {report.analysisWarning && <div className="analysis-warning"><TriangleAlert size={17} /><span>{report.analysisWarning}</span></div>}
+      {recordingError && <div className="analysis-warning"><TriangleAlert size={17} /><span>{recordingError}</span></div>}
+      {coachingUpgradeError && <div className="analysis-warning"><TriangleAlert size={17} /><span>{coachingUpgradeError} Check the Ollama connection in Settings and try again.</span></div>}
 
       {duel && (
         <section className="duel-result-card">
@@ -177,11 +297,11 @@ export function ResultsPage() {
             </article>
           )}
 
-          {!!report.feedback.reframes?.length && (
+          {!!reframes.length && (
             <article className="result-card reframe-card">
               <div className="card-heading"><span className="card-icon"><WandSparkles size={18} /></span><div><span className="eyebrow">Sentence workshop</span><h2>Keep the idea. Sharpen the wording.</h2></div></div>
               <div className="reframe-list">
-                {report.feedback.reframes.map((item, index) => (
+                {reframes.map((item, index) => (
                   <section key={`${item.original}-${index}`}>
                     <div className="reframe-original"><span>You said</span><blockquote>“{item.original}”</blockquote></div>
                     <div className="reframe-arrow"><ArrowRight size={18} /></div>
@@ -204,13 +324,13 @@ export function ResultsPage() {
 
           <article className="result-card transcript-card">
             <div className="card-heading"><span className="card-icon"><FileText size={18} /></span><div><span className="eyebrow">Transcript</span><h2>Your argument in words</h2></div></div>
-            <blockquote lang={attempt.topic.language === 'bn' ? 'bn' : undefined}>{attempt.transcript}</blockquote>
+            <blockquote lang={language}>{attempt.transcript}</blockquote>
             <div className="transcript-footer"><span>{report.text.wordCount} words</span><span>{report.text.sentenceCount} sentences</span><span>{report.transcriptionEngine}</span></div>
           </article>
         </div>
 
         <aside className="results-aside-column">
-          <article className="result-card spoken-coach-card"><div className="card-heading"><span className="card-icon"><Volume2 size={18} /></span><div><span className="eyebrow">Spoken coaching</span><h2>Hear the first priority</h2></div></div><SpokenCoach key={id} feedback={report.feedback} language={attempt.topic.language ?? report.feedback.language ?? 'en'} /></article>
+          <article className="result-card spoken-coach-card"><div className="card-heading"><span className="card-icon"><Volume2 size={18} /></span><div><span className="eyebrow">Spoken coaching</span><h2>Hear the first priority</h2></div></div><SpokenCoach key={id} feedback={report.feedback} language={language} /></article>
 
           {audioUrl && <article className="result-card audio-card" id="recording"><span className="card-icon"><Volume2 size={18} /></span><div><span className="eyebrow">Saved recording</span><h2>Listen for the evidence</h2><p>Replay once while reading the notes. Focus on only one improvement.</p></div><AudioPlayer src={audioUrl} fallbackDuration={attempt.durationSeconds} compact /></article>}
 
@@ -243,7 +363,7 @@ export function ResultsPage() {
               <div><span><FileText size={15} /> Content words</span><strong>{Math.round((report.text.contentWordRatio ?? 0) * 100)}%</strong></div>
               <div><span><AlignLeft size={15} /> Sentence rhythm</span><strong>{metric(report.text.averageSentenceWords ?? 0, ' avg', 1)}</strong></div>
             </div>
-            <p className="local-analysis-note">Stance: {report.text.stanceEngine ?? 'legacy phrase signals'}. {attempt.topic.language === 'bn' ? 'Bengali currently uses phrase and topic signals; explicitly stating পক্ষে or বিপক্ষে gives the checker stronger evidence.' : 'Semantic NLI compares the transcript with the motion, but can still miss sarcasm, mixed rebuttals, or transcription errors.'}</p>
+            <p className="local-analysis-note">Stance: {report.text.stanceEngine ?? 'legacy phrase signals'}. {stanceAnalysisNote(language, report.text.stanceEngine)}</p>
           </article>
 
           <Link className="next-practice-card" to="/practice"><span><small>Next rep</small><strong>Apply one coaching note</strong></span><ArrowRight size={19} /></Link>

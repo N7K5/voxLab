@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { CoachFeedback } from '../types';
 import {
   coachingSections,
+  languageLabel,
   normalizeSpokenCoachPreferences,
+  preferredVoiceForNetworkAccess,
+  previewText,
   rankSpeechVoices,
   segmentCoachingSections,
+  speechLocale,
   type SpeechVoiceLike,
 } from './spokenCoach';
 
@@ -61,12 +65,48 @@ describe('spoken coaching helpers', () => {
     ]);
   });
 
+  it('uses the standard Hindi locale and accepts browser network Hindi voices', () => {
+    const voices = [
+      voice({ name: 'Hindi Local', lang: 'hi-IN' }),
+      voice({ name: 'Browser Hindi', lang: 'hi_IN', localService: false }),
+      voice({ name: 'Bangla Local', lang: 'bn-IN' }),
+    ];
+
+    expect(speechLocale('hi')).toBe('hi-IN');
+    expect(languageLabel('hi')).toBe('Hindi');
+    expect(rankSpeechVoices(voices, 'hi', '', false).map(({ name }) => name)).toEqual(['Hindi Local']);
+    expect(rankSpeechVoices(voices, 'hi', '', true).map(({ name }) => name)).toEqual([
+      'Hindi Local',
+      'Browser Hindi',
+    ]);
+  });
+
+  it('switches explicitly between the best network and on-device voices', () => {
+    const voices = [
+      voice({ name: 'Hindi Local', lang: 'hi-IN', default: true }),
+      voice({ name: 'Hindi Browser Standard', lang: 'hi-IN', localService: false }),
+      voice({ name: 'Hindi Browser Neural', lang: 'hi-IN', localService: false }),
+    ];
+
+    expect(preferredVoiceForNetworkAccess(voices, 'hi', true)?.name).toBe('Hindi Browser Neural');
+    expect(preferredVoiceForNetworkAccess(voices, 'hi', false)?.name).toBe('Hindi Local');
+  });
+
   it('uses Bengali connectors and respects the Bengali sentence mark', () => {
     const sections = coachingSections(feedback, 'bn');
     expect(sections[1]).toContain('আপনার প্রথম অগ্রাধিকার');
     expect(sections[2]).toContain('কেন এটি গুরুত্বপূর্ণ');
     expect(sections[3]).toContain('পরেরবার চেষ্টা করুন');
     expect(sections.every((section) => /[.!?।]$/u.test(section))).toBe(true);
+  });
+
+  it('uses Hindi connectors, preview copy, and the Devanagari sentence mark', () => {
+    const sections = coachingSections(feedback, 'hi');
+    expect(sections[1]).toContain('आपकी पहली प्राथमिकता');
+    expect(sections[2]).toContain('यह क्यों महत्वपूर्ण है');
+    expect(sections[3]).toContain('अगली बार यह आज़माएँ');
+    expect(sections.every((section) => /[.!?।]$/u.test(section))).toBe(true);
+    expect(previewText('hi')).toContain('कोचिंग');
   });
 
   it('groups long coaching into natural, bounded speech chunks', () => {

@@ -41,7 +41,7 @@ import { AudioPlayer } from '../components/AudioPlayer';
 import { Waveform } from '../components/Waveform';
 import { useApp } from '../context/AppContext';
 import { randomTopic } from '../data/topics';
-import { modelForSpeechLanguage, stanceLabel } from '../lib/speechLanguages';
+import { modelForSpeechLanguage, SPEECH_LANGUAGES, stanceLabel } from '../lib/speechLanguages';
 import type {
   AnalysisReport,
   Difficulty,
@@ -103,6 +103,12 @@ function formatTime(seconds: number): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something unexpected happened.';
+}
+
+function argueVerb(language: SpeechLanguage): string {
+  if (language === 'bn') return 'বলুন';
+  if (language === 'hi') return 'बोलें';
+  return 'Argue';
 }
 
 export function PracticePage() {
@@ -399,7 +405,7 @@ export function PracticePage() {
   if (step === 'setup') {
     return (
       <div className="page practice-page setup-page">
-        <div className="practice-page-header"><div><span className="eyebrow"><Target size={14} /> Build a new round</span><h1>Set the challenge</h1><p>Train solo, or pass one device between two local opponents.</p></div><span className="step-count">Step 1 of 3</span></div>
+        <div className="practice-page-header"><div><span className="eyebrow"><Target size={14} /> Build a new round</span><h1>Set the challenge</h1><p>Train solo, or pass one device between two local opponents.</p></div><div className="practice-header-actions"><label className="practice-language-menu" title="Change speaking language"><Languages size={14} /><span className="sr-only">Speaking language</span><select aria-label="Speaking language" value={language} onChange={(event) => changeLanguage(event.target.value as SpeechLanguage)}>{SPEECH_LANGUAGES.map((item) => <option key={item.code} value={item.code}>{item.nativeLabel}</option>)}</select></label><span className="step-count">Step 1 of 3</span></div></div>
 
         <div className="setup-layout">
           <div className="setup-controls">
@@ -412,15 +418,7 @@ export function PracticePage() {
             </section>
 
             <section className="setup-section">
-              <div className="setup-section-heading"><span>02</span><div><h2>Speaking language</h2><p>The topic, transcription, and coaching will follow this choice.</p></div></div>
-              <div className="mode-grid language-grid">
-                <button type="button" className={`mode-choice${language === 'en' ? ' selected' : ''}`} onClick={() => changeLanguage('en')}><Languages size={20} /><span><strong>English</strong><small>English topics and models</small></span></button>
-                <button type="button" className={`mode-choice${language === 'bn' ? ' selected' : ''}`} onClick={() => changeLanguage('bn')}><Languages size={20} /><span lang="bn"><strong>বাংলা</strong><small>বাংলা বিষয় ও ট্রান্সক্রিপশন</small></span></button>
-              </div>
-            </section>
-
-            <section className="setup-section">
-              <div className="setup-section-heading"><span>03</span><div><h2>Difficulty</h2><p>How much complexity do you want today?</p></div></div>
+              <div className="setup-section-heading"><span>02</span><div><h2>Difficulty</h2><p>How much complexity do you want today?</p></div></div>
               <div className="difficulty-grid">
                 {(Object.keys(difficultyDetails) as Difficulty[]).map((option) => (
                   <button key={option} type="button" className={`difficulty-choice ${option}${difficulty === option ? ' selected' : ''}`} onClick={() => changeDifficulty(option)}>
@@ -435,16 +433,16 @@ export function PracticePage() {
             <section className="setup-section">
               {practiceMode === 'solo' ? (
                 <>
-                  <div className="setup-section-heading"><span>04</span><div><h2>Choose your side</h2><p>Stay in control, or make it a reflex test.</p></div></div>
+                  <div className="setup-section-heading"><span>03</span><div><h2>Choose your side</h2><p>Stay in control, or make it a reflex test.</p></div></div>
                   <div className="mode-grid">
                     <button type="button" className={`mode-choice${stanceMode === 'choose' ? ' selected' : ''}`} onClick={() => setStanceMode('choose')}><Target size={20} /><span><strong>I’ll choose</strong><small>Pick for or against</small></span></button>
                     <button type="button" className={`mode-choice${stanceMode === 'game' ? ' selected' : ''}`} onClick={() => setStanceMode('game')}><Dices size={20} /><span><strong>Game mode</strong><small>Random side revealed next</small></span></button>
                   </div>
-                  {stanceMode === 'choose' && <div className="stance-toggle"><button type="button" className={stance === 'for' ? 'selected for' : ''} onClick={() => setStance('for')}><Check size={16} /> {language === 'bn' ? 'পক্ষে' : 'For'}</button><button type="button" className={stance === 'against' ? 'selected against' : ''} onClick={() => setStance('against')}><ArrowLeft size={16} /> {language === 'bn' ? 'বিপক্ষে' : 'Against'}</button></div>}
+                  {stanceMode === 'choose' && <div className="stance-toggle"><button type="button" className={stance === 'for' ? 'selected for' : ''} onClick={() => setStance('for')}><Check size={16} /> {language === 'en' ? 'For' : stanceLabel('for', language)}</button><button type="button" className={stance === 'against' ? 'selected against' : ''} onClick={() => setStance('against')}><ArrowLeft size={16} /> {language === 'en' ? 'Against' : stanceLabel('against', language)}</button></div>}
                 </>
               ) : (
                 <>
-                  <div className="setup-section-heading"><span>04</span><div><h2>Name the speakers</h2><p>The first side is random. The second speaker receives the opposite side.</p></div></div>
+                  <div className="setup-section-heading"><span>03</span><div><h2>Name the speakers</h2><p>The first side is random. The second speaker receives the opposite side.</p></div></div>
                   <div className="duel-name-grid">
                     <label><span>Speaker 1 · account owner</span><input value={speaker1Name} onChange={(event) => setSpeaker1Name(event.target.value)} maxLength={32} placeholder="Speaker 1" /></label>
                     <span className="duel-versus">VS</span>
@@ -456,7 +454,7 @@ export function PracticePage() {
             </section>
 
             <section className="setup-section">
-              <div className="setup-section-heading"><span>05</span><div><h2>Speaking time</h2><p>{practiceMode === 'duel' ? 'Each speaker gets the same amount of time.' : 'One minute is the sweet spot. Customize it when you need more room.'}</p></div></div>
+              <div className="setup-section-heading"><span>04</span><div><h2>Speaking time</h2><p>{practiceMode === 'duel' ? 'Each speaker gets the same amount of time.' : 'One minute is the sweet spot. Customize it when you need more room.'}</p></div></div>
               <div className="duration-pills">{durations.map((seconds) => <button key={seconds} type="button" className={duration === seconds ? 'selected' : ''} onClick={() => setDuration(seconds)}>{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</button>)}</div>
               <label className="duration-slider"><span>Custom duration</span><strong>{formatTime(duration)}</strong><input type="range" min={30} max={180} step={15} value={duration} onChange={(event) => setDuration(Number(event.target.value))} /></label>
             </section>
@@ -465,12 +463,12 @@ export function PracticePage() {
           <aside className={`topic-preview-card${drawingTopic ? ' is-drawing' : ''}`} aria-busy={drawingTopic}>
             {drawingTopic && <div className="topic-draw-overlay" role="status"><span className="topic-draw-icon"><Dices size={24} /></span><strong>Drawing {difficulty === 'easy' ? 'an' : 'a'} {difficulty} prompt</strong><span className="topic-draw-dots" aria-hidden="true"><i /><i /><i /></span></div>}
             <div key={topic.id} className="topic-preview-content" aria-live="polite">
-              <div className="topic-preview-top"><span className={`difficulty-pill ${topic.difficulty}`}>{topic.difficulty}</span><span lang={language === 'bn' ? 'bn' : undefined}>{topic.category}</span></div>
+              <div className="topic-preview-top"><span className={`difficulty-pill ${topic.difficulty}`}>{topic.difficulty}</span><span lang={language}>{topic.category}</span></div>
               <div className="topic-quote-mark">“</div>
-              <h2 lang={language === 'bn' ? 'bn' : undefined}>{topic.prompt}</h2>
-              <p lang={language === 'bn' ? 'bn' : undefined}>{practiceMode === 'duel' ? (language === 'bn' ? 'প্রথম বক্তা একটি এলোমেলো পক্ষ পাবেন। দ্বিতীয় বক্তা বিপরীত পক্ষ নেবেন।' : 'Speaker 1 gets a random side. Speaker 2 takes the opposite.') : stanceMode === 'game' ? (language === 'bn' ? 'বিষয়টি নিশ্চিত করলে আপনার পক্ষ দেখানো হবে।' : 'Your side will be revealed when you lock in this prompt.') : language === 'bn' ? `আপনি ${stanceLabel(stance, language)} কথা বলবেন।` : `You will argue ${stance}.`}</p>
+              <h2 lang={language}>{topic.prompt}</h2>
+              <p lang={language}>{practiceMode === 'duel' ? (language === 'bn' ? 'প্রথম বক্তা একটি এলোমেলো পক্ষ পাবেন। দ্বিতীয় বক্তা বিপরীত পক্ষ নেবেন।' : language === 'hi' ? 'पहले वक्ता को कोई एक पक्ष मिलेगा। दूसरे वक्ता को उसका विपरीत पक्ष मिलेगा।' : 'Speaker 1 gets a random side. Speaker 2 takes the opposite.') : stanceMode === 'game' ? (language === 'bn' ? 'বিষয়টি নিশ্চিত করলে আপনার পক্ষ দেখানো হবে।' : language === 'hi' ? 'विषय चुनने के बाद आपका पक्ष दिखाया जाएगा।' : 'Your side will be revealed when you lock in this prompt.') : language === 'bn' ? `আপনি ${stanceLabel(stance, language)} কথা বলবেন।` : language === 'hi' ? `आप ${stanceLabel(stance, language)} में बोलेंगे।` : `You will argue ${stanceLabel(stance, language)}.`}</p>
               <button className="shuffle-button" type="button" disabled={drawingTopic} onClick={shuffleTopic}>{drawingTopic ? <Dices size={16} /> : <RefreshCw size={16} />} {drawingTopic ? 'Drawing…' : 'Draw another prompt'}</button>
-              <div className="topic-preview-footer"><span><Clock3 size={15} /> {formatTime(duration)}{practiceMode === 'duel' ? ' each' : ''}</span><span><CircleDot size={15} /> {practiceMode === 'duel' ? 'Local 1v1' : stanceMode === 'game' ? (language === 'bn' ? 'এলোমেলো পক্ষ' : 'Random side') : stanceLabel(stance, language)}</span></div>
+              <div className="topic-preview-footer"><span><Clock3 size={15} /> {formatTime(duration)}{practiceMode === 'duel' ? ' each' : ''}</span><span><CircleDot size={15} /> {practiceMode === 'duel' ? 'Local 1v1' : stanceMode === 'game' ? (language === 'bn' ? 'এলোমেলো পক্ষ' : language === 'hi' ? 'यादृच्छिक पक्ष' : 'Random side') : stanceLabel(stance, language)}</span></div>
               <button className="button primary large full" type="button" disabled={drawingTopic} onClick={prepare}>{practiceMode === 'duel' ? 'Start the 1v1' : 'Lock it in'} <ChevronRight size={18} /></button>
             </div>
           </aside>
@@ -504,8 +502,8 @@ export function PracticePage() {
         <div className="ready-layout">
           <section className="ready-prompt">
             <div className="ready-meta"><span className={`difficulty-pill ${topic.difficulty}`}>{topic.difficulty}</span><span>{topic.category}</span>{practiceMode === 'duel' && <span className="duel-turn-pill"><UsersRound size={12} /> {activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} · turn {activeSpeaker}</span>}</div>
-            <span className={`stance-reveal ${stance}`}><Sparkles size={15} /> {language === 'bn' ? 'বলুন' : 'Argue'} {stanceLabel(stance, language)}</span>
-            <h1 lang={language === 'bn' ? 'bn' : undefined}>{topic.prompt}</h1>
+            <span className={`stance-reveal ${stance}`}><Sparkles size={15} /> {argueVerb(language)} {stanceLabel(stance, language)}</span>
+            <h1 lang={language}>{topic.prompt}</h1>
             <div className="prep-framework">
               <span><strong>Claim</strong><small>State your position</small></span><ArrowRight size={16} />
               <span><strong>Reason</strong><small>Explain why</small></span><ArrowRight size={16} />
@@ -530,7 +528,7 @@ export function PracticePage() {
     return (
       <div className="recording-page">
         <div className="recording-live-label"><span /> Recording live</div>
-        <div className="recording-topic" lang={language === 'bn' ? 'bn' : undefined}><span>{practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} · ` : ''}{language === 'bn' ? 'বলুন' : 'Argue'} {stanceLabel(stance, language)}</span><h1>{topic.prompt}</h1></div>
+        <div className="recording-topic" lang={language}><span>{practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} · ` : ''}{argueVerb(language)} {stanceLabel(stance, language)}</span><h1>{topic.prompt}</h1></div>
         <div className="recording-stage">
           <div className="record-timer" style={{ '--timer-progress': `${timerProgress * 360}deg` } as CSSProperties}>
             <div><strong>{formatTime(remaining)}</strong><span>remaining</span></div>
@@ -550,7 +548,7 @@ export function PracticePage() {
         <div className="practice-page-header"><div><span className="eyebrow"><Check size={14} /> {practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} recorded` : 'Recording complete'}</span><h1>Listen once. Then analyze.</h1><p>{practiceMode === 'duel' && activeSpeaker === 1 ? 'This turn will be sealed before the device handoff.' : 'You can redo the take before any analysis or saving happens.'}</p></div><span className="step-count">{practiceMode === 'duel' ? `Speaker ${activeSpeaker} of 2` : 'Step 2 of 3'}</span></div>
         <div className="review-layout">
           <section className="review-player-card">
-            <div className="review-topic" lang={language === 'bn' ? 'bn' : undefined}><span className={`stance-pill ${stance}`}>{stanceLabel(stance, language)}</span><h2>{topic.prompt}</h2></div>
+            <div className="review-topic" lang={language}><span className={`stance-pill ${stance}`}>{stanceLabel(stance, language)}</span><h2>{topic.prompt}</h2></div>
             <Waveform levels={levels} label="Waveform from recorded speech" />
             {audioUrl && <AudioPlayer src={audioUrl} fallbackDuration={recording.durationSeconds} />}
             <div className="review-facts"><span><Clock3 size={15} /><strong>{recording.durationSeconds.toFixed(1)}s</strong><small>recorded</small></span><span><AudioLines size={15} /><strong>{recording.mimeType.split(';')[0]}</strong><small>format</small></span><span><ShieldCheck size={15} /><strong>{settings.saveRecordings ? 'Enabled' : 'Off'}</strong><small>save audio</small></span></div>
@@ -562,7 +560,7 @@ export function PracticePage() {
             {error && <div className="form-error" role="alert">{error}</div>}
             <button className="button primary large full" type="button" onClick={() => void analyze()}><Sparkles size={18} /> {practiceMode === 'duel' && activeSpeaker === 1 ? 'Analyze and seal turn' : practiceMode === 'duel' ? 'Analyze and compare' : 'Analyze this speech'}</button>
             <button className="button secondary full" type="button" onClick={resetRecording}><RotateCcw size={17} /> Record again</button>
-            <p className="model-note">First-time analysis may download the selected {language === 'bn' ? 'multilingual ' : ''}Whisper model{language === 'en' ? ' and semantic stance model' : ''}. They are cached for later practices.</p>
+            <p className="model-note">First-time analysis may download the selected {language === 'en' ? '' : 'multilingual '}Whisper model{settings.stanceAnalysis === 'semantic' ? ' and multilingual semantic stance model' : ''}. They are cached for later practices.</p>
           </aside>
         </div>
       </div>
@@ -611,7 +609,7 @@ export function PracticePage() {
             </div>
           )}
           <form onSubmit={submitManual}>
-            <label><span>Manual transcript</span><textarea lang={language === 'bn' ? 'bn' : undefined} value={manualTranscript} onChange={(event) => { setManualTranscript(event.target.value); setError(null); }} rows={9} placeholder={language === 'bn' ? 'আপনি যা বলেছিলেন তা বাংলায় লিখুন…' : 'Type the words you remember saying…'} required /></label>
+            <label><span>Manual transcript</span><textarea lang={language} value={manualTranscript} onChange={(event) => { setManualTranscript(event.target.value); setError(null); }} rows={9} placeholder={language === 'bn' ? 'আপনি যা বলেছিলেন তা বাংলায় লিখুন…' : language === 'hi' ? 'आपने जो कहा था उसे हिन्दी में लिखें…' : 'Type the words you remember saying…'} required /></label>
             <div className="manual-count">{manualTranscript.trim() ? manualTranscript.trim().split(/\s+/).length : 0} words</div>
             {error && <div className="form-error" role="alert">{error}</div>}
             <button className="button primary large full" type="submit"><BrainCircuit size={18} /> Continue analysis</button>

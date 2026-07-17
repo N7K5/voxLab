@@ -1,5 +1,7 @@
 import type { Stance, TextMetrics } from '../types';
 
+export type SemanticStanceLanguage = 'en' | 'bn' | 'hi';
+
 export interface SemanticStanceResult {
   signal: 'aligned' | 'opposed' | 'unclear';
   confidence?: number;
@@ -16,6 +18,17 @@ export function mergeStanceAssessment(
       stanceEngine: `${fast.stanceEngine ?? 'Fast phrase signals'} · semantic check inconclusive`,
     };
   }
+  const fastIsDecisive = fast.stanceSignal === 'aligned' || fast.stanceSignal === 'opposed';
+  const signalsConflict = fastIsDecisive
+    && semantic.signal !== 'unclear'
+    && fast.stanceSignal !== semantic.signal;
+  if (signalsConflict) {
+    return {
+      stanceSignal: 'mixed',
+      stanceConfidence: Math.min(semantic.confidence ?? 0.65, fast.stanceConfidence ?? 0.65),
+      stanceEngine: `${semantic.engine} · conflicts with ${fast.stanceEngine ?? 'fast phrase signals'}`,
+    };
+  }
   return {
     stanceSignal: semantic.signal,
     stanceConfidence: semantic.confidence,
@@ -28,10 +41,22 @@ interface PendingRequest {
   reject: (reason: Error) => void;
   stance: Stance;
   onProgress?: (message: string, progress?: number) => void;
+  timeout: ReturnType<typeof globalThis.setTimeout>;
 }
 
 let worker: Worker | null = null;
 const pending = new Map<string, PendingRequest>();
+const STANCE_TIMEOUT_MS = 240_000;
+
+function stopWorker(error: Error): void {
+  for (const request of pending.values()) {
+    globalThis.clearTimeout(request.timeout);
+    request.reject(error);
+  }
+  pending.clear();
+  worker?.terminate();
+  worker = null;
+}
 
 function getWorker(): Worker {
   if (worker) return worker;
@@ -45,6 +70,7 @@ function getWorker(): Worker {
       return;
     }
     pending.delete(id);
+    globalThis.clearTimeout(request.timeout);
     if (event.data.type === 'error') {
       request.reject(new Error(String(event.data.error)));
       return;
@@ -59,10 +85,7 @@ function getWorker(): Worker {
     });
   };
   worker.onerror = (event) => {
-    for (const request of pending.values()) request.reject(new Error(event.message || 'The stance-analysis worker stopped.'));
-    pending.clear();
-    worker?.terminate();
-    worker = null;
+    stopWorker(new Error(event.message || 'The stance-analysis worker stopped.'));
   };
   return worker;
 }
@@ -71,11 +94,27 @@ export function analyzeStanceSemantically(input: {
   transcript: string;
   topic: string;
   stance: Stance;
+  language?: SemanticStanceLanguage;
   onProgress?: (message: string, progress?: number) => void;
 }): Promise<SemanticStanceResult> {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject, stance: input.stance, onProgress: input.onProgress });
-    getWorker().postMessage({ id, transcript: input.transcript, topic: input.topic });
+    const timeout = globalThis.setTimeout(() => {
+      if (!pending.has(id)) return;
+      stopWorker(new Error('The semantic stance model did not finish within four minutes, so fast phrase signals were used.'));
+    }, STANCE_TIMEOUT_MS);
+    pending.set(id, { resolve, reject, stance: input.stance, onProgress: input.onProgress, timeout });
+    try {
+      getWorker().postMessage({
+        id,
+        transcript: input.transcript,
+        topic: input.topic,
+        language: input.language ?? 'en',
+      });
+    } catch (error) {
+      pending.delete(id);
+      globalThis.clearTimeout(timeout);
+      reject(error instanceof Error ? error : new Error('The stance-analysis worker could not start.'));
+    }
   });
 }

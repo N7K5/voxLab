@@ -93,6 +93,16 @@ describe('analysis helpers', () => {
     expect(metrics.stanceSignal).toBe('aligned');
   });
 
+  it('distinguishes support from a negated more-harm-than-good comparison', () => {
+    const sanctionsTopic: Topic = { id: 'sanctions', prompt: 'Economic sanctions cause more harm than good.', difficulty: 'hard', category: 'International relations' };
+    const support = 'Economic sanctions cause more harm than good because ordinary families bear higher prices while political leaders remain protected from those costs.';
+    const opposition = 'Economic sanctions do not cause more harm than good because targeted financial pressure can change policy without exposing civilians to military conflict.';
+
+    expect(analyzeText(support, sanctionsTopic, 'for', audio).stanceSignal).toBe('aligned');
+    expect(analyzeText(opposition, sanctionsTopic, 'against', audio).stanceSignal).toBe('aligned');
+    expect(analyzeText(opposition, sanctionsTopic, 'for', audio).stanceSignal).toBe('opposed');
+  });
+
   it('keeps a decisive fast stance result when semantic analysis is inconclusive', () => {
     const merged = mergeStanceAssessment(
       { stanceSignal: 'opposed', stanceConfidence: 0.79, stanceEngine: 'Fast phrase signals' },
@@ -101,6 +111,15 @@ describe('analysis helpers', () => {
     expect(merged.stanceSignal).toBe('opposed');
     expect(merged.stanceConfidence).toBe(0.79);
     expect(merged.stanceEngine).toContain('inconclusive');
+  });
+
+  it('does not hard-cap a speech when semantic and explicit phrase signals conflict', () => {
+    const merged = mergeStanceAssessment(
+      { stanceSignal: 'aligned', stanceConfidence: 0.79, stanceEngine: 'Fast Hindi phrase signals' },
+      { signal: 'opposed', confidence: 0.71, engine: 'Local semantic NLI' },
+    );
+    expect(merged.stanceSignal).toBe('mixed');
+    expect(merged.stanceEngine).toContain('conflicts');
   });
 
   it('keeps an average speech in the developing range', () => {
