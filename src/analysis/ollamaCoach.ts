@@ -240,6 +240,7 @@ export async function requestOllamaFeedback(
   input: Parameters<typeof buildPrompt>[0],
   settings: UserSettings,
   apiBaseUrl: string,
+  signal?: AbortSignal,
 ): Promise<CoachFeedback> {
   const prompt = buildPrompt(input);
   const body = {
@@ -252,9 +253,13 @@ export async function requestOllamaFeedback(
   const endpoint = settings.ollamaViaServer
     ? `${apiBaseUrl.replace(/\/+$/, '')}/ai/coach`
     : ollamaChatEndpoint(settings.ollamaEndpoint);
+  if (signal?.aborted) throw new DOMException('Coaching generation was cancelled.', 'AbortError');
   const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(), 120_000);
   let response: Response;
+  let result: { message?: { content?: string }; error?: string } | null;
   try {
     response = await fetch(endpoint, {
       method: 'POST',
@@ -263,13 +268,17 @@ export async function requestOllamaFeedback(
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(body),
     });
+    result = await response.json().catch(() => null) as { message?: { content?: string }; error?: string } | null;
   } catch (error) {
+    if (signal?.aborted) throw new DOMException('Coaching generation was cancelled.', 'AbortError');
     if (controller.signal.aborted) throw new Error('Ollama did not respond within two minutes.');
     throw error;
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', onAbort);
   }
-  const result = await response.json().catch(() => null) as { message?: { content?: string }; error?: string } | null;
+  if (signal?.aborted) throw new DOMException('Coaching generation was cancelled.', 'AbortError');
+  if (controller.signal.aborted) throw new Error('Ollama did not respond within two minutes.');
   if (!response.ok) throw new Error(result?.error || `Ollama request failed (${response.status}).`);
   if (!result?.message?.content) throw new Error('Ollama returned no coaching text.');
   return parseContent(result.message.content, settings.ollamaModel, input.transcript, input.topic.language);

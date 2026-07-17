@@ -23,7 +23,7 @@ import type { AiProvider, SpeechLanguage, UserSettings } from '../types';
 const speechModelDetails: Record<string, { tier: string; detail: string; heavy?: boolean }> = {
   'onnx-community/whisper-tiny.en': { tier: 'Fast', detail: 'Smallest download; best for quick practice on most devices.' },
   'onnx-community/whisper-base.en': { tier: 'Balanced', detail: 'Better recognition with a moderate first-time download.' },
-  'distil-whisper/distil-small.en': { tier: 'Accurate', detail: 'A larger distilled English model; WebGPU recommended.', heavy: true },
+  'distil-whisper/distil-small.en': { tier: 'Accurate', detail: 'A larger distilled English model; Auto or WASM/CPU recommended to avoid a much larger WebGPU download.', heavy: true },
   'onnx-community/whisper-small.en': { tier: 'Maximum', detail: 'Highest browser tier; roughly 600 MB of model weights on WebGPU plus substantial runtime memory.', heavy: true },
   'onnx-community/whisper-tiny': { tier: 'Fast multilingual', detail: 'Smallest Bengali/Hindi-capable model; quickest, but less accurate with accents and noisy rooms.' },
   'onnx-community/whisper-base': { tier: 'Balanced multilingual', detail: 'A moderate Bengali/Hindi-capable model for everyday devices.' },

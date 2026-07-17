@@ -27,7 +27,7 @@ Ollama is not used as an audio model. The browser measures pauses, pace, loudnes
 - Evidence-specific browser coaching that works without a generative LLM
 - Optional structured coaching from Ollama
 - One-click Ollama upgrades for saved browser-coached reports using their transcript and metrics, never the voice recording
-- Evidence-backed weaknesses, transcript quotations and reframes, topic strategy, and spoken coaching with ranked English/Bengali/Hindi voices
+- Evidence-backed weaknesses, transcript quotations and reframes, topic strategy, and spoken coaching with a dependable system default plus at most three curated English/Bengali/Hindi alternatives
 - Attempt history, saved playback, per-attempt deletion, and account deletion
 - Optional recording retention
 - Persistent system, dark, light, and dusk themes
@@ -44,7 +44,9 @@ npm run dev
 
 Open `http://localhost:5173`. The API also starts on `http://localhost:8787`. With no database configuration, the app automatically uses IndexedDB in the current browser.
 
-The first analysis downloads the configured Whisper ONNX model. The recommended semantic stance checker downloads a separate multilingual NLI model of roughly 360 MB and supports English, Bengali, and Hindi. Models are cached when the browser permits it. Microphone access requires `localhost` or HTTPS.
+The first analysis downloads the configured Whisper ONNX model. With the default automatic WebGPU setup, Whisper Tiny and its browser runtime can use well over 100 MB; the recommended semantic stance checker downloads a separate multilingual NLI model of roughly 360 MB. A first run can therefore approach 500 MB. Transformers.js keeps model files in the browser cache when storage is available, but private browsing, cleared site data, quota pressure, or switching model/device tiers can make the browser fetch them again. Microphone access requires `localhost` or HTTPS.
+
+For a lower-download setup, choose **Fast · Whisper Tiny**, **WASM / CPU**, and **Fast phrase signals** in Settings. This is slower and the stance check is less capable, but it avoids the separate semantic model and uses the smaller quantized Whisper weights. Model-loading progress can represent either a network fetch or a read from the browser's model cache; use the browser developer tools' transferred-size column when you need to distinguish them.
 
 Custom motions receive a quick structural precheck followed by an AI suitability check for clarity, breadth, and reasonable arguments on both sides. An accepted motion is used for the current round and is stored with that attempt in history. The browser suitability screen uses the same multilingual local NLI model as semantic stance checking, so its first custom check may trigger that roughly 360 MB download. When Ollama coaching is selected, only the custom motion text is sent to the configured Ollama endpoint; if it is unavailable, VoxLab falls back to the browser model. This is a debate-suitability screen, not a factual accuracy guarantee.
 
@@ -200,7 +202,7 @@ The browser path is fully useful without Ollama:
 2. A small Whisper model runs locally via WebGPU when available, with WASM fallback.
 3. Deterministic signal and language analysis computes the metrics. The recommended multilingual NLI model can compare English, Bengali, or Hindi transcripts with the assigned motion; fast language-specific phrase and topic signals remain available without the extra model.
 4. A local rules-based coach produces evidence-backed strengths, weaknesses, strategy, and drills. It only offers a sentence reframe when a safe mechanical edit is observable; Ollama mode handles semantic rewrites.
-5. Spoken coaching uses a language-matched voice, shorter conversational phrasing, sentence pauses, and adjustable speed/pitch. Voices the browser reports as local/system remain the default; users can explicitly opt into a browser-provided network voice when they prefer its sound. A browser-reported local voice does not guarantee offline synthesis.
+5. Spoken coaching uses shorter conversational phrasing, sentence pauses, and adjustable speed/pitch. The browser/operating-system default is the reliable first choice; the menu then shows at most three language-matched alternatives and removes known novelty/effect voices. Users can explicitly reveal browser-provided network voices when they prefer their sound. A browser-reported local voice does not guarantee offline synthesis.
 
 Model files are downloaded from Hugging Face on first use unless you self-host them. Once loaded, inference itself happens in the browser. Transcription does not use the browser Web Speech recognition API, which can route audio to a browser vendor.
 
@@ -214,7 +216,7 @@ The Settings page exposes four English transcription tiers:
 
 - **Fast:** Whisper Tiny English
 - **Balanced:** Whisper Base English
-- **Accurate:** Distil Whisper Small English; WebGPU recommended
+- **Accurate:** Distil Whisper Small English; Auto/WASM recommended for its available quantized browser files
 - **Maximum:** Whisper Small English; large download and a powerful desktop recommended
 
 The two larger options improve transcription at a real compute and memory cost. The maximum tier uses roughly 600 MB of model weights on WebGPU and needs additional runtime memory. The semantic stance checker is separately switchable between the recommended multilingual local NLI model (roughly 360 MB on first use) and fast phrase signals.

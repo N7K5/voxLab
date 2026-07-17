@@ -43,6 +43,7 @@ import { AudioPlayer } from '../components/AudioPlayer';
 import { Waveform } from '../components/Waveform';
 import { useApp } from '../context/AppContext';
 import { randomTopic } from '../data/topics';
+import { requestPersistentBrowserStorage } from '../lib/browserStorage';
 import { modelForSpeechLanguage, SPEECH_LANGUAGES, stanceLabel } from '../lib/speechLanguages';
 import type {
   AnalysisReport,
@@ -108,6 +109,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something unexpected happened.';
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 function argueVerb(language: SpeechLanguage): string {
   if (language === 'bn') return 'বলুন';
   if (language === 'hi') return 'बोलें';
@@ -154,6 +159,7 @@ export function PracticePage() {
   const topicDrawTimerRef = useRef<number | null>(null);
   const topicCheckRequestRef = useRef(0);
   const topicCheckAbortRef = useRef<AbortController | null>(null);
+  const analysisAbortRef = useRef<AbortController | null>(null);
   const customTopicTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -177,6 +183,8 @@ export function PracticePage() {
     topicCheckRequestRef.current += 1;
     topicCheckAbortRef.current?.abort();
     topicCheckAbortRef.current = null;
+    analysisAbortRef.current?.abort();
+    analysisAbortRef.current = null;
     disposeTopicVerifier();
   }, []);
 
@@ -410,6 +418,12 @@ export function PracticePage() {
 
   const analyze = async (transcriptOverride?: string) => {
     if (!recording) return;
+    // Persistence is best-effort. If granted, model Cache Storage and local
+    // history are less likely to be evicted between practice sessions.
+    void requestPersistentBrowserStorage();
+    analysisAbortRef.current?.abort();
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
     setError(null);
     setProgress({ stage: 'audio', message: 'Reading the shape of your voice…' });
     setStep('processing');
@@ -427,10 +441,13 @@ export function PracticePage() {
         },
         apiBaseUrl: config.storage.apiBaseUrl,
         transcriptOverride,
+        signal: controller.signal,
         onProgress: (nextProgress) => {
+          if (controller.signal.aborted || analysisAbortRef.current !== controller) return;
           setProgress((currentProgress) => currentProgress?.stage === nextProgress.stage ? currentProgress : nextProgress);
         },
       });
+      controller.signal.throwIfAborted();
 
       if (practiceMode === 'duel' && activeSpeaker === 1) {
         setPendingDuel({
@@ -450,6 +467,7 @@ export function PracticePage() {
 
       setProgress({ stage: 'saving', message: storageStatus?.kind === 'database' ? 'Saving to your configured server…' : 'Saving privately in this browser…' });
       const id = crypto.randomUUID();
+      controller.signal.throwIfAborted();
 
       if (practiceMode === 'duel' && activeSpeaker === 2) {
         if (!pendingDuel || !duelId) throw new Error('The first speaker’s sealed turn is missing. Please start the 1v1 again.');
@@ -478,8 +496,11 @@ export function PracticePage() {
       } else {
         await saveAttempt(buildAttempt(id, recording, stance, analyzed.transcript, analyzed.report, new Date().toISOString()));
       }
+      controller.signal.throwIfAborted();
+      if (analysisAbortRef.current === controller) analysisAbortRef.current = null;
       navigate(`/results/${id}`, { replace: true });
     } catch (analysisError) {
+      if (controller.signal.aborted || isAbortError(analysisError)) return;
       if (analysisError instanceof TranscriptionUnavailableError) {
         setManualReason(analysisError.message);
         setStep('manual');
@@ -487,6 +508,8 @@ export function PracticePage() {
         setError(errorMessage(analysisError));
         setStep('review');
       }
+    } finally {
+      if (analysisAbortRef.current === controller) analysisAbortRef.current = null;
     }
   };
 

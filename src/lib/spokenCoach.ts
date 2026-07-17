@@ -28,6 +28,18 @@ const QUALITY_HINTS: Array<[RegExp, number]> = [
   [/\bhigh quality\b/i, 3_000],
 ];
 
+const CLEAR_VOICE_HINTS: Array<[RegExp, number]> = [
+  [/\b(?:samantha|alex|daniel|karen|moira|rishi|lekha)\b/i, 800],
+  [/\b(?:aria|jenny|guy|ava|andrew|brian|emma|sonia|libby|ryan|david|zira|mark)\b/i, 750],
+  [/\b(?:heera|kalpana|hemant|swara|madhur|neerja|prabhat)\b/i, 700],
+  [/\bgoogle\b/i, 500],
+  [/\bmicrosoft\b/i, 450],
+];
+
+const NOVELTY_VOICE_HINT = /\b(?:albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|fred|good news|hysterical|jester|organ|princess|ralph|superstar|trinoids|whisper|wobble|zarvox|novelty|sound effect|character voice|robot|robotic)\b/i;
+
+export const MAX_CURATED_SPEECH_VOICES = 3;
+
 export function speechLocale(language: SpeechLanguage): 'en-US' | 'bn-BD' | 'hi-IN' {
   if (language === 'bn') return 'bn-BD';
   if (language === 'hi') return 'hi-IN';
@@ -89,10 +101,29 @@ export function matchesSpeechLanguage(voice: SpeechVoiceLike, language: SpeechLa
 }
 
 function qualityScore(voice: SpeechVoiceLike): number {
-  return QUALITY_HINTS.reduce(
+  const quality = QUALITY_HINTS.reduce(
     (score, [pattern, value]) => Math.max(score, pattern.test(voice.name) ? value : 0),
     0,
   );
+  const clarity = CLEAR_VOICE_HINTS.reduce(
+    (score, [pattern, value]) => Math.max(score, pattern.test(voice.name) ? value : 0),
+    0,
+  );
+  return quality + clarity;
+}
+
+export function isNoveltySpeechVoice(voice: SpeechVoiceLike): boolean {
+  return NOVELTY_VOICE_HINT.test(voice.name);
+}
+
+function uniqueSpeechVoices<T extends SpeechVoiceLike>(voices: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return voices.filter((voice) => {
+    const key = `${voice.voiceURI || voice.name}\u0000${normalizedTag(voice.lang)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function rankSpeechVoices<T extends SpeechVoiceLike>(
@@ -111,14 +142,30 @@ export function rankSpeechVoices<T extends SpeechVoiceLike>(
     return saved + quality + exactLanguage + defaultForLanguage + localTieBreak;
   };
 
-  return voices
+  const ranked = uniqueSpeechVoices(voices
     .filter((voice) => matchesSpeechLanguage(voice, language))
-    .filter((voice) => allowNetworkVoices || voice.localService)
+    .filter((voice) => !isNoveltySpeechVoice(voice))
+    .filter((voice) => allowNetworkVoices || voice.localService))
     .map((voice, index) => ({ voice, index, score: score(voice) }))
     .sort((left, right) => right.score - left.score
       || left.voice.name.localeCompare(right.voice.name)
       || left.index - right.index)
     .map(({ voice }) => voice);
+
+  const curated = ranked.slice(0, MAX_CURATED_SPEECH_VOICES);
+  if (allowNetworkVoices && !curated.some((voice) => !voice.localService)) {
+    const bestNetworkVoice = ranked.find((voice) => !voice.localService);
+    if (bestNetworkVoice) curated.splice(MAX_CURATED_SPEECH_VOICES - 1, 1, bestNetworkVoice);
+  }
+  return curated;
+}
+
+export function resolveSelectedSpeechVoice<T extends SpeechVoiceLike>(
+  voices: readonly T[],
+  savedVoiceUri: string,
+): T | null {
+  if (!savedVoiceUri) return null;
+  return voices.find((voice) => voice.voiceURI === savedVoiceUri) ?? null;
 }
 
 export function preferredVoiceForNetworkAccess<T extends SpeechVoiceLike>(
@@ -126,10 +173,12 @@ export function preferredVoiceForNetworkAccess<T extends SpeechVoiceLike>(
   language: SpeechLanguage,
   allowNetworkVoices: boolean,
 ): T | undefined {
-  const ranked = rankSpeechVoices(voices, language, '', allowNetworkVoices);
-  return allowNetworkVoices
-    ? ranked.find((voice) => !voice.localService)
-    : ranked[0];
+  return rankSpeechVoices(
+    voices.filter((voice) => allowNetworkVoices ? !voice.localService : voice.localService),
+    language,
+    '',
+    allowNetworkVoices,
+  )[0];
 }
 
 function terminal(text: string, language: SpeechLanguage): string {

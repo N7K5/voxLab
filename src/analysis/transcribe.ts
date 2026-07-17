@@ -1,3 +1,5 @@
+import type { SpeechLanguage } from '../types';
+
 export interface TranscriptionProgress {
   stage: 'model' | 'transcription';
   message: string;
@@ -15,6 +17,7 @@ interface PendingRequest {
   reject: (reason: Error) => void;
   onProgress?: (progress: TranscriptionProgress) => void;
   model: string;
+  cleanup: () => void;
 }
 
 let worker: Worker | null = null;
@@ -23,6 +26,20 @@ const TRANSCRIPTION_SAMPLE_RATE = 16_000;
 const TRAILING_SILENCE_SECONDS = 0.2;
 const TARGET_RMS = 0.08;
 const MAX_GAIN = 12;
+
+function transcriptionAbortError(): DOMException {
+  return new DOMException('Local transcription was cancelled.', 'AbortError');
+}
+
+function stopWorker(error: Error): void {
+  for (const request of pending.values()) {
+    request.cleanup();
+    request.reject(error);
+  }
+  pending.clear();
+  worker?.terminate();
+  worker = null;
+}
 
 function hasSignal(audio: Float32Array): boolean {
   if (!audio.length) return false;
@@ -80,6 +97,7 @@ function getWorker(): Worker {
       return;
     }
     pending.delete(id);
+    request.cleanup();
     if (event.data.type === 'error') {
       request.reject(new Error(String(event.data.error)));
       return;
@@ -91,10 +109,7 @@ function getWorker(): Worker {
     });
   };
   worker.onerror = (event) => {
-    for (const request of pending.values()) request.reject(new Error(event.message || 'The transcription worker stopped.'));
-    pending.clear();
-    worker?.terminate();
-    worker = null;
+    stopWorker(new Error(event.message || 'The transcription worker stopped.'));
   };
   return worker;
 }
@@ -106,21 +121,42 @@ export function transcribeLocally(
     device: 'auto' | 'webgpu' | 'wasm';
     language?: SpeechLanguage;
     onProgress?: (progress: TranscriptionProgress) => void;
+    signal?: AbortSignal;
   },
 ): Promise<TranscriptionResult> {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject, onProgress: options.onProgress, model: options.model });
-    const transferable = prepareTranscriptionAudio(audio);
-    getWorker().postMessage({
-      type: 'transcribe',
-      id,
-      audio: transferable,
+    if (options.signal?.aborted) {
+      reject(transcriptionAbortError());
+      return;
+    }
+    const onAbort = () => {
+      if (pending.has(id)) stopWorker(transcriptionAbortError());
+    };
+    const cleanup = () => options.signal?.removeEventListener('abort', onAbort);
+    pending.set(id, {
+      resolve,
+      reject,
+      onProgress: options.onProgress,
       model: options.model,
-      device: options.device,
-      language: options.language ?? 'en',
-      hasSignal: hasSignal(audio),
-    }, [transferable.buffer]);
+      cleanup,
+    });
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    const transferable = prepareTranscriptionAudio(audio);
+    try {
+      getWorker().postMessage({
+        type: 'transcribe',
+        id,
+        audio: transferable,
+        model: options.model,
+        device: options.device,
+        language: options.language ?? 'en',
+        hasSignal: hasSignal(audio),
+      }, [transferable.buffer]);
+    } catch (error) {
+      pending.delete(id);
+      cleanup();
+      reject(error instanceof Error ? error : new Error('The transcription worker could not start.'));
+    }
   });
 }
-import type { SpeechLanguage } from '../types';

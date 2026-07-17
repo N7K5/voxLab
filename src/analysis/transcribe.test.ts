@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { prepareTranscriptionAudio } from './transcribe';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { prepareTranscriptionAudio, transcribeLocally } from './transcribe';
 
 const SAMPLE_RATE = 16_000;
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function rms(values: Float32Array): number {
   let squareSum = 0;
@@ -32,5 +36,33 @@ describe('prepareTranscriptionAudio', () => {
 
     expect(prepared.every(Number.isFinite)).toBe(true);
     expect(prepared.every((value) => value === 0)).toBe(true);
+  });
+});
+
+describe('local transcription cancellation', () => {
+  it('terminates an in-flight model worker when its analysis is aborted', async () => {
+    let instance: HangingWorker | undefined;
+    class HangingWorker {
+      onmessage: ((event: MessageEvent<Record<string, unknown>>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      postMessage = vi.fn();
+      terminate = vi.fn();
+
+      constructor() {
+        instance = this;
+      }
+    }
+    vi.stubGlobal('Worker', HangingWorker);
+    const controller = new AbortController();
+    const transcription = transcribeLocally(Float32Array.from([0.1, -0.1]), {
+      model: 'test/whisper',
+      device: 'wasm',
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    await expect(transcription).rejects.toMatchObject({ name: 'AbortError' });
+    expect(instance?.terminate).toHaveBeenCalledOnce();
   });
 });

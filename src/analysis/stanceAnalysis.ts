@@ -42,15 +42,21 @@ interface PendingRequest {
   stance: Stance;
   onProgress?: (message: string, progress?: number) => void;
   timeout: ReturnType<typeof globalThis.setTimeout>;
+  cleanup: () => void;
 }
 
 let worker: Worker | null = null;
 const pending = new Map<string, PendingRequest>();
 const STANCE_TIMEOUT_MS = 240_000;
 
+function stanceAbortError(): DOMException {
+  return new DOMException('Semantic stance analysis was cancelled.', 'AbortError');
+}
+
 function stopWorker(error: Error): void {
   for (const request of pending.values()) {
     globalThis.clearTimeout(request.timeout);
+    request.cleanup();
     request.reject(error);
   }
   pending.clear();
@@ -71,6 +77,7 @@ function getWorker(): Worker {
     }
     pending.delete(id);
     globalThis.clearTimeout(request.timeout);
+    request.cleanup();
     if (event.data.type === 'error') {
       request.reject(new Error(String(event.data.error)));
       return;
@@ -96,14 +103,31 @@ export function analyzeStanceSemantically(input: {
   stance: Stance;
   language?: SemanticStanceLanguage;
   onProgress?: (message: string, progress?: number) => void;
+  signal?: AbortSignal;
 }): Promise<SemanticStanceResult> {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
+    if (input.signal?.aborted) {
+      reject(stanceAbortError());
+      return;
+    }
+    const onAbort = () => {
+      if (pending.has(id)) stopWorker(stanceAbortError());
+    };
+    const cleanup = () => input.signal?.removeEventListener('abort', onAbort);
     const timeout = globalThis.setTimeout(() => {
       if (!pending.has(id)) return;
       stopWorker(new Error('The semantic stance model did not finish within four minutes, so fast phrase signals were used.'));
     }, STANCE_TIMEOUT_MS);
-    pending.set(id, { resolve, reject, stance: input.stance, onProgress: input.onProgress, timeout });
+    pending.set(id, {
+      resolve,
+      reject,
+      stance: input.stance,
+      onProgress: input.onProgress,
+      timeout,
+      cleanup,
+    });
+    input.signal?.addEventListener('abort', onAbort, { once: true });
     try {
       getWorker().postMessage({
         id,
@@ -114,6 +138,7 @@ export function analyzeStanceSemantically(input: {
     } catch (error) {
       pending.delete(id);
       globalThis.clearTimeout(timeout);
+      cleanup();
       reject(error instanceof Error ? error : new Error('The stance-analysis worker could not start.'));
     }
   });

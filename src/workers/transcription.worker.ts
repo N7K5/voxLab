@@ -1,4 +1,5 @@
 import { env, pipeline } from '@huggingface/transformers';
+import { shouldTryWebGpuAutomatically, transcriptionModelDtype } from '../lib/transcriptionModel';
 import { isSpeechLanguage, whisperLanguageName } from '../lib/speechLanguages';
 import type { SpeechLanguage } from '../types';
 
@@ -57,14 +58,14 @@ async function loadForDevice(
   post(message.id, { type: 'status', stage: 'model', message: `Loading local speech model (${device.toUpperCase()})…`, progress: 0 });
   const loaded = await pipeline('automatic-speech-recognition', message.model, {
     device,
-    dtype: device === 'webgpu'
-      ? { encoder_model: 'fp32', decoder_model_merged: 'q4' }
-      : 'q8',
+    dtype: transcriptionModelDtype(message.model, device),
     progress_callback: (progress: { status?: string; progress?: number; file?: string }) => {
       post(message.id, {
         type: 'status',
         stage: 'model',
-        message: progress.status === 'progress' ? `Downloading ${progress.file ?? 'model data'}…` : 'Preparing local speech model…',
+        message: progress.status === 'progress'
+          ? `Loading ${progress.file ?? 'model data'} (browser cache or network)…`
+          : 'Preparing local speech model…',
         progress: typeof progress.progress === 'number' ? progress.progress : undefined,
       });
     },
@@ -79,7 +80,7 @@ async function loadTranscriber(message: TranscribeMessage): Promise<SpeechPipeli
   const supportsWebGpu = 'gpu' in navigator;
   if (message.device !== 'auto') return loadForDevice(message, message.device);
   if (transcriber && loadedDevice && loadedKey === `${message.model}:${loadedDevice}`) return transcriber;
-  if (supportsWebGpu) {
+  if (supportsWebGpu && shouldTryWebGpuAutomatically(message.model)) {
     try {
       return await loadForDevice(message, 'webgpu');
     } catch {

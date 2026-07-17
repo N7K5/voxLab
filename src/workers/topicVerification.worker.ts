@@ -108,7 +108,7 @@ function loadClassifier(id: string): Promise<ZeroShotPipeline> {
         post(id, {
           type: 'status',
           message: progress.status === 'progress'
-            ? `Downloading ${progress.file ?? 'topic-check model'}…`
+            ? `Loading ${progress.file ?? 'topic-check model'} (browser cache or network)…`
             : 'Preparing the local topic checker…',
           progress: typeof progress.progress === 'number' ? progress.progress : undefined,
         });

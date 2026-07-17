@@ -5,9 +5,9 @@ import {
   defaultSpokenCoachPreferences,
   languageLabel,
   normalizeSpokenCoachPreferences,
-  preferredVoiceForNetworkAccess,
   previewText,
   rankSpeechVoices,
+  resolveSelectedSpeechVoice,
   segmentCoachingSections,
   speechLocale,
   spokenCoachPreferencesKey,
@@ -101,7 +101,7 @@ export function SpokenCoach({
     () => rankSpeechVoices(allVoices, language, preferences.voiceUri, true),
     [allVoices, language, preferences.voiceUri],
   );
-  const selectedVoice = voices.find((voice) => voice.voiceURI === preferences.voiceUri) ?? voices[0] ?? null;
+  const selectedVoice = resolveSelectedSpeechVoice(voices, preferences.voiceUri);
 
   const cancelPlayback = useCallback(() => {
     sessionRef.current += 1;
@@ -174,15 +174,16 @@ export function SpokenCoach({
   };
 
   const changeNetworkAccess = (allowNetworkVoices: boolean) => {
-    const nextVoice = preferredVoiceForNetworkAccess(allVoices, language, allowNetworkVoices);
     updatePreferences({
       allowNetworkVoices,
-      ...(nextVoice ? { voiceUri: nextVoice.voiceURI } : {}),
+      ...(!allowNetworkVoices && selectedVoice && !selectedVoice.localService
+        ? { voiceUri: '' }
+        : {}),
     });
   };
 
   const beginPlayback = useCallback((nextSegments: readonly SpeechSegment[], mode: Exclude<PlaybackMode, 'idle'>) => {
-    if (!supported || !selectedVoice || !nextSegments.length) return;
+    if (!supported || !nextSegments.length) return;
     cancelPlayback();
     setError(null);
     const session = sessionRef.current;
@@ -211,8 +212,8 @@ export function SpokenCoach({
 
       const segment = nextSegments[index];
       const utterance = new SpeechSynthesisUtterance(segment.text);
-      utterance.voice = selectedVoice;
-      utterance.lang = selectedVoice.lang || speechLocale(language);
+      if (selectedVoice) utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice?.lang || speechLocale(language);
       utterance.rate = preferences.rate;
       utterance.pitch = preferences.pitch;
       utterance.volume = 1;
@@ -252,7 +253,7 @@ export function SpokenCoach({
         utteranceRef.current = null;
         synth.cancel();
         setPlayback('idle');
-        setError(playbackStartTimeoutMessage(language, !selectedVoice.localService));
+        setError(playbackStartTimeoutMessage(language, selectedVoice ? !selectedVoice.localService : false));
       }, VOICE_START_TIMEOUT_MS);
       try {
         if (synth.paused) synth.resume();
@@ -289,27 +290,28 @@ export function SpokenCoach({
       <p className="spoken-coach-script" lang={speechLocale(language)}>{script}</p>
 
       <div className="spoken-coach-controls">
-        {voicesLoaded && selectedVoice ? (
-          <label>
-            <span>{languageLabel(language)} voice</span>
-            <select
-              value={selectedVoice.voiceURI}
-              onChange={(event) => updatePreferences({ voiceUri: event.target.value })}
-            >
-              {voices.map((voice, index) => (
-                <option key={`${voice.voiceURI}-${voice.name}`} value={voice.voiceURI}>
-                  {index === 0 ? 'Recommended · ' : ''}{voice.name} · {voice.lang} · {voice.localService ? 'Browser/system' : 'Browser network'}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
+        <label>
+          <span>{languageLabel(language)} voice</span>
+          <select
+            value={selectedVoice?.voiceURI ?? ''}
+            onChange={(event) => updatePreferences({ voiceUri: event.target.value })}
+          >
+            <option value="">Recommended · System default · {speechLocale(language)}</option>
+            {voices.map((voice) => (
+              <option key={`${voice.voiceURI}-${voice.name}`} value={voice.voiceURI}>
+                {voice.name} · {voice.lang} · {voice.localService ? 'Browser/system' : 'Browser network'}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {(!voicesLoaded || voices.length === 0) && (
           <p className="spoken-coach-unavailable" role="status">
             {!voicesLoaded
-              ? 'Looking for speech voices…'
+              ? 'Looking for optional voices… System default is ready.'
               : hasNetworkAlternative && !preferences.allowNetworkVoices
-                ? `No browser/system ${languageLabel(language)} voice was found. You can opt in to network voices below.`
-                : `No ${languageLabel(language)} voice was reported by this browser.`}
+                ? `No extra browser/system ${languageLabel(language)} voice was found. System default is still available, or you can show network voices below.`
+                : `No extra ${languageLabel(language)} voice was reported. System default is still available.`}
           </p>
         )}
 
@@ -346,9 +348,9 @@ export function SpokenCoach({
             onChange={(event) => changeNetworkAccess(event.target.checked)}
           />
           <span>
-            <strong>Use a browser network voice</strong>
+            <strong>Show browser network voices</strong>
             <small>{hasNetworkAlternative
-              ? 'Switches to the best matching voice reported by this browser. The browser’s provider may receive the coaching text.'
+              ? 'Adds eligible network voices to the menu. Selecting one may send the coaching text to the browser’s speech provider.'
               : `No browser network voice for ${languageLabel(language)} is currently available.`}</small>
           </span>
         </label>
@@ -358,10 +360,10 @@ export function SpokenCoach({
         <div className="spoken-coach-actions">
           {playback === 'idle' ? (
             <>
-              <button className="button secondary" type="button" onClick={preview} disabled={!selectedVoice}>
+              <button className="button secondary" type="button" onClick={preview}>
                 <Headphones size={16} /> Preview
               </button>
-              <button className="button primary" type="button" onClick={() => beginPlayback(segments, 'coaching')} disabled={!selectedVoice || !segments.length}>
+              <button className="button primary" type="button" onClick={() => beginPlayback(segments, 'coaching')} disabled={!segments.length}>
                 <Play size={17} fill="currentColor" /> Play coaching
               </button>
             </>
@@ -373,12 +375,16 @@ export function SpokenCoach({
         </div>
       </div>
 
-      {selectedVoice && (
-        <span className="spoken-coach-privacy"><ShieldAlert size={13} /> {selectedIsNetworkVoice
-          ? 'This browser network voice may send coaching text to your browser’s speech provider.'
-          : 'The browser reports this as a local/system voice, but its speech engine may still use the network and receive the coaching text.'} Availability depends on the browser and device.</span>
-      )}
-      <span className="spoken-coach-note"><Volume2 size={13} /> {selectedVoice ? (selectedIsNetworkVoice ? 'Uses a browser-provided network voice.' : 'Uses a voice the browser reports as local/system; offline playback is not guaranteed.') : 'Speech starts only when a compatible voice is available.'} No generated coaching audio is saved.</span>
+      <span className="spoken-coach-privacy"><ShieldAlert size={13} /> {selectedIsNetworkVoice
+        ? 'This browser network voice may send coaching text to your browser’s speech provider.'
+        : selectedVoice
+          ? 'The browser reports this as a local/system voice, but its speech engine may still use the network and receive the coaching text.'
+          : 'System default lets your browser or operating system choose the voice; the browser does not report whether that speech engine uses the network.'} Availability depends on the browser and device.</span>
+      <span className="spoken-coach-note"><Volume2 size={13} /> {selectedVoice
+        ? selectedIsNetworkVoice
+          ? 'Uses a browser-provided network voice.'
+          : 'Uses a voice the browser reports as local/system; offline playback is not guaranteed.'
+        : 'Uses the browser/operating-system default and does not wait for the optional voice list.'} No generated coaching audio is saved.</span>
     </div>
   );
 }

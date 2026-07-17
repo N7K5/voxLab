@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { CoachFeedback } from '../types';
 import {
   coachingSections,
+  isNoveltySpeechVoice,
   languageLabel,
+  MAX_CURATED_SPEECH_VOICES,
   normalizeSpokenCoachPreferences,
   preferredVoiceForNetworkAccess,
   previewText,
   rankSpeechVoices,
+  resolveSelectedSpeechVoice,
   segmentCoachingSections,
   speechLocale,
   type SpeechVoiceLike,
@@ -60,9 +63,42 @@ describe('spoken coaching helpers', () => {
       'Saved British',
       'US Natural',
       'US Default',
-      'US Standard',
-      'British Default',
     ]);
+  });
+
+  it('filters novelty voices and exposes no more than three clear alternatives', () => {
+    const voices = [
+      voice({ name: 'Bubbles', lang: 'en-US', voiceURI: 'saved-bubbles' }),
+      voice({ name: 'Zarvox', lang: 'en-US' }),
+      voice({ name: 'Samantha', lang: 'en-US' }),
+      voice({ name: 'Microsoft Aria Natural', lang: 'en-US' }),
+      voice({ name: 'Google US English', lang: 'en-US' }),
+      voice({ name: 'English Standard One', lang: 'en-US' }),
+      voice({ name: 'English Standard Two', lang: 'en-US' }),
+    ];
+
+    const ranked = rankSpeechVoices(voices, 'en', 'saved-bubbles', false);
+    expect(isNoveltySpeechVoice(voices[0])).toBe(true);
+    expect(ranked).toHaveLength(MAX_CURATED_SPEECH_VOICES);
+    expect(ranked.map(({ name }) => name)).toEqual([
+      'Microsoft Aria Natural',
+      'Samantha',
+      'Google US English',
+    ]);
+    expect(ranked.some(({ name }) => name === 'Bubbles' || name === 'Zarvox')).toBe(false);
+  });
+
+  it('uses system default when a stored voice is empty, unavailable, or filtered', () => {
+    const voices = rankSpeechVoices([
+      voice({ name: 'Samantha', lang: 'en-US', voiceURI: 'samantha' }),
+      voice({ name: 'Bubbles', lang: 'en-US', voiceURI: 'bubbles' }),
+    ], 'en', '', false);
+
+    expect(resolveSelectedSpeechVoice(voices, '')).toBeNull();
+    expect(resolveSelectedSpeechVoice(voices, 'missing')).toBeNull();
+    expect(resolveSelectedSpeechVoice(voices, 'bubbles')).toBeNull();
+    expect(resolveSelectedSpeechVoice(voices, 'samantha')?.name).toBe('Samantha');
+    expect(resolveSelectedSpeechVoice([], '')).toBeNull();
   });
 
   it('uses the standard Hindi locale and accepts browser network Hindi voices', () => {

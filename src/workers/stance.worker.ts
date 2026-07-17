@@ -109,7 +109,9 @@ function loadClassifier(id: string): Promise<ZeroShotPipeline> {
       progress_callback: (progress: { status?: string; progress?: number; file?: string }) => {
         post(id, {
           type: 'status',
-          message: progress.status === 'progress' ? `Downloading ${progress.file ?? 'stance model'}…` : 'Preparing semantic stance model…',
+          message: progress.status === 'progress'
+            ? `Loading ${progress.file ?? 'stance model'} (browser cache or network)…`
+            : 'Preparing semantic stance model…',
           progress: typeof progress.progress === 'number' ? progress.progress : undefined,
         });
       },
