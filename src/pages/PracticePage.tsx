@@ -40,6 +40,7 @@ import { runAnalysis, TranscriptionUnavailableError, type AnalysisProgress } fro
 import { disposeTopicVerifier, normalizeTopicDraft, topicDraftWordCount, verifyCustomTopic } from '../analysis/topicVerification';
 import { VoiceRecorder, type RecordingResult } from '../audio/recorder';
 import { AudioPlayer } from '../components/AudioPlayer';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Waveform } from '../components/Waveform';
 import { useApp } from '../context/AppContext';
 import { randomTopic } from '../data/topics';
@@ -146,6 +147,7 @@ export function PracticePage() {
   const [manualReason, setManualReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [redoConfirmOpen, setRedoConfirmOpen] = useState(false);
   const [activeSpeaker, setActiveSpeaker] = useState<1 | 2>(1);
   const [speaker1Name, setSpeaker1Name] = useState('Speaker 1');
   const [speaker2Name, setSpeaker2Name] = useState('Opponent');
@@ -175,6 +177,14 @@ export function PracticePage() {
     setAudioUrl(nextUrl);
     return () => URL.revokeObjectURL(nextUrl);
   }, [recording]);
+
+  useEffect(() => {
+    if (step !== 'review') return;
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [step]);
 
   useEffect(() => () => {
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
@@ -368,6 +378,7 @@ export function PracticePage() {
   };
 
   const resetRecording = () => {
+    setRedoConfirmOpen(false);
     setRecording(null);
     setElapsed(0);
     setLevels([]);
@@ -738,26 +749,36 @@ export function PracticePage() {
 
   if (step === 'review' && recording) {
     return (
-      <div className="page practice-page review-page">
-        <div className="practice-page-header"><div><span className="eyebrow"><Check size={14} /> {practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} recorded` : 'Recording complete'}</span><h1>Listen once. Then analyze.</h1><p>{practiceMode === 'duel' && activeSpeaker === 1 ? 'This turn will be sealed before the device handoff.' : 'You can redo the take before any analysis or saving happens.'}</p></div><span className="step-count">{practiceMode === 'duel' ? `Speaker ${activeSpeaker} of 2` : 'Step 2 of 3'}</span></div>
-        <div className="review-layout">
-          <section className="review-player-card">
-            <div className="review-topic" lang={language}><span className={`stance-pill ${stance}`}>{stanceLabel(stance, language)}</span><h2>{topic.prompt}</h2></div>
-            <Waveform levels={levels} label="Waveform from recorded speech" />
-            {audioUrl && <AudioPlayer src={audioUrl} fallbackDuration={recording.durationSeconds} />}
-            <div className="review-facts"><span><Clock3 size={15} /><strong>{recording.durationSeconds.toFixed(1)}s</strong><small>recorded</small></span><span><AudioLines size={15} /><strong>{recording.mimeType.split(';')[0]}</strong><small>format</small></span><span><ShieldCheck size={15} /><strong>{settings.saveRecordings ? 'Enabled' : 'Off'}</strong><small>save audio</small></span></div>
-          </section>
-          <aside className="review-action-card">
-            <span className="eyebrow"><BrainCircuit size={14} /> Ready for evidence</span>
-            <h2>Analyze voice and words</h2>
-            <p>VoxLab will measure pauses, energy, pitch, pace, fillers, vocabulary, structure, and relevance.</p>
-            {error && <div className="form-error" role="alert">{error}</div>}
-            <button className="button primary large full" type="button" onClick={() => void analyze()}><Sparkles size={18} /> {practiceMode === 'duel' && activeSpeaker === 1 ? 'Analyze and seal turn' : practiceMode === 'duel' ? 'Analyze and compare' : 'Analyze this speech'}</button>
-            <button className="button secondary full" type="button" onClick={resetRecording}><RotateCcw size={17} /> Record again</button>
-            <p className="model-note">First-time analysis may download the selected {language === 'en' ? '' : 'multilingual '}Whisper model{settings.stanceAnalysis === 'semantic' ? ' and multilingual semantic stance model' : ''}. They are cached for later practices.</p>
-          </aside>
+      <>
+        <div className="page practice-page review-page">
+          <div className="practice-page-header"><div><span className="eyebrow"><Check size={14} /> {practiceMode === 'duel' ? `${activeSpeaker === 1 ? speaker1Name.trim() || 'Speaker 1' : speaker2Name.trim() || 'Speaker 2'} recorded` : 'Recording complete'}</span><h1>Listen once. Then analyze.</h1><p>{practiceMode === 'duel' && activeSpeaker === 1 ? 'This turn will be sealed before the device handoff.' : 'You can redo the take before any analysis or saving happens.'}</p></div><span className="step-count">{practiceMode === 'duel' ? `Speaker ${activeSpeaker} of 2` : 'Step 2 of 3'}</span></div>
+          <div className="review-layout">
+            <section className="review-player-card">
+              <div className="review-topic" lang={language}><span className={`stance-pill ${stance}`}>{stanceLabel(stance, language)}</span><h2>{topic.prompt}</h2></div>
+              <Waveform levels={levels} label="Waveform from recorded speech" />
+              {audioUrl && <AudioPlayer src={audioUrl} fallbackDuration={recording.durationSeconds} />}
+              <div className="review-facts"><span><Clock3 size={15} /><strong>{recording.durationSeconds.toFixed(1)}s</strong><small>recorded</small></span><span><AudioLines size={15} /><strong>{recording.mimeType.split(';')[0]}</strong><small>format</small></span><span><ShieldCheck size={15} /><strong>{settings.saveRecordings ? 'Enabled' : 'Off'}</strong><small>save audio</small></span></div>
+            </section>
+            <aside className="review-action-card">
+              <span className="eyebrow"><BrainCircuit size={14} /> Ready for evidence</span>
+              <h2>Analyze voice and words</h2>
+              <p>VoxLab will measure pauses, energy, pitch, pace, fillers, vocabulary, structure, and relevance.</p>
+              {error && <div className="form-error" role="alert">{error}</div>}
+              <button className="button primary large full" type="button" onClick={() => void analyze()}><Sparkles size={18} /> {practiceMode === 'duel' && activeSpeaker === 1 ? 'Analyze and seal turn' : practiceMode === 'duel' ? 'Analyze and compare' : 'Analyze this speech'}</button>
+              <button className="button secondary full" type="button" onClick={() => setRedoConfirmOpen(true)}><RotateCcw size={17} /> Record again</button>
+              <p className="model-note">First-time analysis may download the selected {language === 'en' ? '' : 'multilingual '}Whisper model{settings.stanceAnalysis === 'semantic' ? ' and multilingual semantic stance model' : ''}. They are cached for later practices.</p>
+            </aside>
+          </div>
         </div>
-      </div>
+        <ConfirmDialog
+          open={redoConfirmOpen}
+          title="Discard this recording?"
+          description={<p>Your current take has not been analyzed or saved. Record again only if you want to replace it.</p>}
+          confirmLabel="Discard and record again"
+          onCancel={() => setRedoConfirmOpen(false)}
+          onConfirm={resetRecording}
+        />
+      </>
     );
   }
 
