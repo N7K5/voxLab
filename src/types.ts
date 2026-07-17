@@ -47,15 +47,21 @@ export interface TextMetrics {
   wordCount: number;
   wordsPerMinute: number;
   uniqueWordRatio: number;
+  contentWordRatio: number;
   fillerCount: number;
   fillersPerMinute: number;
   repeatedPhraseCount: number;
   transitionCount: number;
+  transitionVariety: number;
+  reasoningMarkerCount: number;
+  exampleMarkerCount: number;
   topicKeywordCoverage: number;
   stanceSignal: 'aligned' | 'mixed' | 'unclear';
   hasOpening: boolean;
   hasConclusion: boolean;
   sentenceCount: number;
+  averageSentenceWords: number;
+  sentenceLengthVariation: number;
 }
 
 export interface ScoreBreakdown {

@@ -13,6 +13,7 @@ import {
 import { useState, type FormEvent } from 'react';
 import { Brand } from '../components/Brand';
 import { StorageBadge } from '../components/StorageBadge';
+import { ThemePicker } from '../components/ThemePicker';
 import { useApp } from '../context/AppContext';
 
 type AuthMode = 'login' | 'signup';
@@ -54,6 +55,7 @@ export function AuthPage() {
 
   return (
     <main className="auth-page">
+      <ThemePicker className="auth-theme-picker" />
       <section className="auth-story">
         <div className="auth-story-inner">
           <Brand />

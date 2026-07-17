@@ -11,7 +11,9 @@ import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Brand } from './Brand';
+import { LocalModeBanner } from './LocalModeBanner';
 import { StorageBadge } from './StorageBadge';
+import { ThemePicker } from './ThemePicker';
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -45,6 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
           <div className="topbar-actions">
             <StorageBadge className="desktop-storage-badge" />
+            <ThemePicker />
             <span className="user-chip" title={user?.username}>{user?.username.slice(0, 1).toUpperCase()}</span>
             <button className="icon-button desktop-logout" type="button" onClick={() => void handleLogOut()} aria-label="Sign out">
               <LogOut size={17} />
@@ -69,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         )}
       </header>
+      <LocalModeBanner />
       <main className="main-content">{children}</main>
     </div>
   );

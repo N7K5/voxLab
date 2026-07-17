@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  AlignLeft,
   AudioLines,
   CheckCircle2,
   Clock3,
@@ -8,11 +9,15 @@ import {
   Gauge,
   Headphones,
   Lightbulb,
+  Link2,
   LoaderCircle,
   MessageSquareText,
   Mic2,
   Pause,
+  Quote,
+  Shuffle,
   Sparkles,
+  Target,
   TriangleAlert,
   Volume2,
 } from 'lucide-react';
@@ -35,6 +40,13 @@ const scoreLabels: Array<{ key: keyof ScoreBreakdown; label: string }> = [
 
 function metric(value: number | null, suffix = '', digits = 0): string {
   return value === null || !Number.isFinite(value) ? '—' : `${value.toFixed(digits)}${suffix}`;
+}
+
+function scoreBand(score: number): string {
+  if (score >= 90) return 'Exceptional';
+  if (score >= 80) return 'Strong';
+  if (score >= 65) return 'Capable';
+  return 'Developing';
 }
 
 export function ResultsPage() {
@@ -86,7 +98,7 @@ export function ResultsPage() {
       <div className="results-back-row"><Link className="text-link" to="/history"><ArrowLeft size={15} /> History</Link><span>{createdLabel}</span></div>
 
       <section className="results-hero">
-        <div className="results-score"><ScoreRing score={report.scores.overall} /><span className="provider-badge"><Sparkles size={13} /> {providerLabel}</span></div>
+        <div className="results-score"><ScoreRing score={report.scores.overall} /><span className="score-band">{scoreBand(report.scores.overall)}</span><span className="provider-badge"><Sparkles size={13} /> {providerLabel}</span></div>
         <div className="results-title">
           <div className="attempt-meta"><span className={`difficulty-pill ${attempt.topic.difficulty}`}>{attempt.topic.difficulty}</span><span className={`stance-pill ${attempt.stance}`}>{attempt.stance}</span><span><Clock3 size={12} /> {Math.round(attempt.durationSeconds)} sec</span></div>
           <h1>{attempt.topic.prompt}</h1>
@@ -102,6 +114,7 @@ export function ResultsPage() {
           <article className="result-card">
             <div className="card-heading"><span className="card-icon"><Gauge size={18} /></span><div><span className="eyebrow">Score breakdown</span><h2>How the speech held together</h2></div></div>
             <div className="metric-bars">{scoreLabels.map(({ key, label }) => <MetricBar key={key} label={label} value={report.scores[key]} />)}</div>
+            <div className="score-calibration"><Gauge size={15} /><p><strong>A deliberately demanding rubric.</strong> Around 70 is capable, 80 is strong, and 90 is exceptional. Short takes are capped until there is enough voice and language evidence.</p></div>
           </article>
 
           <article className="result-card">
@@ -143,6 +156,19 @@ export function ResultsPage() {
               <span><small>Clipping</small><strong>{metric(report.audio.clippingRatio * 100, '%', 1)}</strong></span>
             </div>
             <p className="local-analysis-note">These signals are derived from the recorded waveform, not guessed from the transcript.</p>
+          </article>
+
+          <article className="result-card language-evidence-card">
+            <div className="card-heading"><span className="card-icon"><AlignLeft size={18} /></span><div><span className="eyebrow">Argument evidence</span><h2>Measured language signals</h2></div></div>
+            <div className="evidence-grid">
+              <div><span><Target size={15} /> Topic coverage</span><strong>{Math.round((report.text.topicKeywordCoverage ?? 0) * 100)}%</strong></div>
+              <div><span><Link2 size={15} /> Reasoning links</span><strong>{report.text.reasoningMarkerCount ?? 0}</strong></div>
+              <div><span><Quote size={15} /> Example cues</span><strong>{report.text.exampleMarkerCount ?? 0}</strong></div>
+              <div><span><Shuffle size={15} /> Transition variety</span><strong>{report.text.transitionVariety ?? report.text.transitionCount}</strong></div>
+              <div><span><FileText size={15} /> Content words</span><strong>{Math.round((report.text.contentWordRatio ?? 0) * 100)}%</strong></div>
+              <div><span><AlignLeft size={15} /> Sentence rhythm</span><strong>{metric(report.text.averageSentenceWords ?? 0, ' avg', 1)}</strong></div>
+            </div>
+            <p className="local-analysis-note">These are transparent transcript signals—not a claim that the app understands every idea or synonym.</p>
           </article>
 
           <Link className="next-practice-card" to="/practice"><span><small>Next rep</small><strong>Apply one coaching note</strong></span><ArrowRight size={19} /></Link>

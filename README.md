@@ -2,6 +2,8 @@
 
 VoxLab is a browser-first speaking coach for short, timed arguments. It chooses a prompt and stance, records the response, transcribes speech locally, measures observable delivery features, and turns those measurements into practical feedback.
 
+**Try it here:** [https://n7k5.github.io/voxLab](https://n7k5.github.io/voxLab/). This is the browser-local demo: accounts, settings, history, analytics, and enabled recordings stay in that visitor's browser.
+
 It supports two independent choices:
 
 - **Storage:** browser-only IndexedDB, or PostgreSQL through the included API server.
@@ -12,17 +14,18 @@ Ollama is not used as an audio model. The browser measures pauses, pace, loudnes
 ## What is included
 
 - Username/password signup and login with no email verification
-- Easy, medium, and hard curated prompts
+- 72 curated easy, medium, and hard prompts
 - User-selected or game-mode For/Against stances
 - Adjustable 30–180 second timer (60 seconds by default)
 - Microphone check, countdown, live waveform, and early finish
 - Local Whisper transcription in a Web Worker through Transformers.js
-- Pause, silence, pacing, filler, vocabulary, structure, relevance, pitch, volume, and clipping analytics
+- Pause, silence, pacing, filler, vocabulary, structure, relevance, argument-evidence, pitch, volume, and clipping analytics
 - Browser-generated feedback that works without an LLM
 - Optional structured coaching from Ollama
 - Attempt history, saved playback, per-attempt deletion, and account deletion
 - Optional recording retention
-- Responsive UI
+- Persistent system, dark, light, and dusk themes
+- Responsive UI with reduced-motion support
 
 ## Quick start
 

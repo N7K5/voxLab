@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f5f2ea" />
     <meta name="description" content="Private, practical speaking practice with local voice analysis." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      (() => {
+        try {
+          const preference = localStorage.getItem('voxlab-theme') || 'system';
+          const theme = preference === 'system'
+            ? (matchMedia('(prefers-color-scheme: light)').matches ? 'daylight' : 'midnight')
+            : preference;
+          if (['midnight', 'daylight', 'dusk'].includes(theme)) document.documentElement.dataset.theme = theme;
+        } catch { /* Use the default palette. */ }
+      })();
+    </script>
     <title>VoxLab — Speak with purpose</title>
   </head>
   <body>
